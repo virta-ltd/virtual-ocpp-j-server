@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  ocppj-virtual-server:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: ocppj-virtual-server
+    container_name: ocppj-virtual-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db:3308
+      DB_USER: $DB_USER
+      DB_DATABASE: $DB_DATABASE
+      DB_PASSWORD: $DB_PASSWORD
+      APP_PORT: $APP_PORT
+    ports:
+      - '8080:8080'
+    volumes: 
+      - ./src:/app/src
+    networks: 
+      - ocppj-virtual-network
+    command: 'npm run start:dev'
+  
+  db:
+    image: mysql:5.7
+    container_name: db
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - 3308:3306
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: $DB_ROOT_PASSWORD
+      MYSQL_DATABASE: $DB_DATABASE
+      MYSQL_USER: $DB_USER
+      MYSQL_PASSWORD: $DB_PASSWORD
+    networks:
+      - ocppj-virtual-network
+
+networks:
+  ocppj-virtual-network:
+    driver: bridge
+
+volumes:
+  db_data:
