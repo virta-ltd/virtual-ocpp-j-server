@@ -10,7 +10,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DB_HOST: db:3308
+      DB_HOST: db
+      DB_PORT: $DB_PORT
       DB_USER: $DB_USER
       DB_DATABASE: $DB_DATABASE
       DB_PASSWORD: $DB_PASSWORD
