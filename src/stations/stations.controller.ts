@@ -19,7 +19,6 @@ export class StationsController {
 
   @Get()
   getStations(@Query() filterDto: GetStationsFilterDto): Promise<Station[]> {
-    console.log(filterDto);
     return this.stationsService.getStations(filterDto);
   }
 

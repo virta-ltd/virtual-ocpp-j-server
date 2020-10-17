@@ -1,6 +1,6 @@
 export class CreateOrUpdateStationDto {
-  identity: string;
-  centralSystemUrl: string;
+  identity?: string;
+  centralSystemUrl?: string;
   meterValue?: number;
   currentChargingPower?: number;
 }
