@@ -20,9 +20,10 @@ services:
       - '8080:8080'
     volumes: 
       - ./src:/app/src
+      - node_modules:/home/node/app/node_modules
     networks: 
       - ocppj-virtual-network
-    command: 'npm run start:dev'
+    command: './wait-for.sh db:3306 -- npm run start:dev'
   
   db:
     image: mysql:5.7
@@ -47,3 +48,4 @@ networks:
 
 volumes:
   db_data:
+  node_modules:

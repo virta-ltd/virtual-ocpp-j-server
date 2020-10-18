@@ -1,0 +1,16 @@
+FROM node:12.19 AS build
+
+# USER node
+WORKDIR /app
+COPY . .
+RUN npm ci && npm run build
+
+FROM node:12.19.0-slim
+
+# USER node
+EXPOSE 8080
+
+COPY --from=build /app/dist /app/package.json /app/package-lock.json ./
+RUN npm ci --production
+
+CMD [ "node", "dist/main.js" ]
