@@ -9,6 +9,12 @@ export class Station extends BaseEntity {
   identity: string;
 
   @Column()
+  vendor: string;
+
+  @Column()
+  model: string;
+
+  @Column()
   centralSystemUrl: string;
 
   @Column()

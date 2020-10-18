@@ -13,7 +13,7 @@ export class StationRepository extends Repository<Station> {
       currentChargingPower,
     } = createStationDto;
 
-    const station = new Station();
+    const station = this.create();
     station.identity =
       identity ??
       `${process.env.DEFAULT_IDENTITY_NAME}${Math.round(
