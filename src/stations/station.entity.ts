@@ -24,7 +24,7 @@ export class Station extends BaseEntity {
   chargeInProgress: boolean = false;
 
   @Column()
-  currentTransactionId: number = 0;
+  currentTransactionId: number = null;
 
   @Column()
   currentChargingPower: number;
