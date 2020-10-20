@@ -7,6 +7,8 @@ import {
   Post,
   Put,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
@@ -18,6 +20,7 @@ export class StationsController {
   constructor(private stationsService: StationsService) {}
 
   @Get()
+  @UsePipes(ValidationPipe)
   getStations(@Query() filterDto: GetStationsFilterDto): Promise<Station[]> {
     return this.stationsService.getStations(filterDto);
   }
@@ -28,6 +31,7 @@ export class StationsController {
   }
 
   @Post()
+  @UsePipes(new ValidationPipe({ skipMissingProperties: true }))
   createStation(
     @Body() createStationDto: CreateOrUpdateStationDto,
   ): Promise<Station> {

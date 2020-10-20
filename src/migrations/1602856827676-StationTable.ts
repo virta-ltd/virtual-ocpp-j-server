@@ -22,11 +22,13 @@ export class StationTable1602856827676 implements MigrationInterface {
             name: 'vendor',
             type: 'varchar(20)',
             isNullable: false,
+            default: `'${process.env.DEFAULT_VENDOR}'`,
           },
           {
             name: 'model',
             type: 'varchar(20)',
             isNullable: false,
+            default: `'${process.env.DEFAULT_MODEL}'`,
           },
           {
             name: 'centralSystemUrl',
