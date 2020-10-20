@@ -9,16 +9,16 @@ export class Station extends BaseEntity {
   identity: string;
 
   @Column()
-  vendor: string;
+  vendor: string = process.env.DEFAULT_VENDOR;
 
   @Column()
-  model: string;
+  model: string = process.env.DEFAULT_MODEL;
 
   @Column()
   centralSystemUrl: string;
 
   @Column()
-  meterValue: number;
+  meterValue: number = 0;
 
   @Column()
   chargeInProgress: boolean = false;
@@ -27,5 +27,5 @@ export class Station extends BaseEntity {
   currentTransactionId: number = null;
 
   @Column()
-  currentChargingPower: number;
+  currentChargingPower: number = 16;
 }
