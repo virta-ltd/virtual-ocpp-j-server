@@ -1,5 +1,4 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
-import fs = require('fs');
 
 const typeOrmConfig: TypeOrmModuleOptions = {
   type: 'mysql',
@@ -12,7 +11,7 @@ const typeOrmConfig: TypeOrmModuleOptions = {
   migrations: ['dist/migrations/*{.ts,.js}'],
   migrationsTableName: 'migrations',
   migrationsRun: false,
-  synchronize: false, // should not be used for production
+  synchronize: false,
 };
 
 export = typeOrmConfig;
