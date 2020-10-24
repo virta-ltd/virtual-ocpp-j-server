@@ -17,13 +17,14 @@ services:
       DB_PASSWORD: $DB_PASSWORD
       APP_PORT: $APP_PORT
     ports:
-      - '8080:8080'
+      - 8080:8080
+      - 9229:9229
     volumes: 
       - ./src:/app/src
       - node_modules:/app/node_modules
     networks: 
       - ocppj-virtual-network
-    command: './wait-for.sh db:3306 -- npm run start:dev'
+    command: './wait-for.sh db:3306 -- npm run start:debug-migrate'
   
   db:
     image: mysql:5.7

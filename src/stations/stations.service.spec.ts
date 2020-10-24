@@ -81,11 +81,15 @@ describe('StationsService', () => {
       const createStationFn = stationRepository.createStation as jest.Mock;
       const station = new Station();
       createStationFn.mockResolvedValue(station);
+      const connectStationToCentralSystemFn = jest
+        .spyOn(stationService, 'connectStationToCentralSystem')
+        .mockImplementation(_ => Promise.resolve(undefined));
 
       const result = await stationService.createStation({});
 
       expect(createStationFn).toHaveBeenCalledWith({});
       expect(result).toEqual(station);
+      expect(connectStationToCentralSystemFn).toHaveBeenCalledWith(station);
     });
   });
 
