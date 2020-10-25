@@ -8,7 +8,7 @@ import { StationWebSocket } from './station-websocket';
 
 @Injectable()
 export class StationsService {
-  private connectedStations: StationWebSocket[] = [];
+  public connectedStations: StationWebSocket[] = [];
   constructor(
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
@@ -44,7 +44,7 @@ export class StationsService {
     return this.stationRepository.updateStation(station, updateStationDto);
   }
 
-  async connectStationToCentralSystem(station: Station) {
+  connectStationToCentralSystem(station: Station) {
     const newStationWebSocketClient = new StationWebSocket(station);
     this.connectedStations.push(newStationWebSocketClient);
   }
@@ -60,11 +60,11 @@ export class StationsService {
     const connectedStationsIdentity = this.connectedStations.map(
       client => client.wsClient.readyState === 1 && client.station.identity,
     );
-    const disconnectedStations = dbStations.filter(
+    const unconnectedStations = dbStations.filter(
       dbStation => connectedStationsIdentity.indexOf(dbStation.identity) < 0,
     );
 
-    disconnectedStations.forEach(station =>
+    unconnectedStations.forEach(station =>
       this.connectStationToCentralSystem(station),
     );
   }

@@ -4,12 +4,20 @@ import { Station } from './station.entity';
 export class StationWebSocket {
   public station: Station;
   public wsClient: WebSocket;
-  private connectedTime: Date;
-  private pingInterval: NodeJS.Timeout;
+  public connectedTime: Date;
+  public pingInterval: NodeJS.Timeout;
   public constructor(station: Station) {
     this.station = station;
 
     this.createConnection();
+    this.bindMethods();
+  }
+
+  private bindMethods() {
+    this.wsClient.on('message', this.onMessage);
+    this.wsClient.on('open', this.onConnectionOpen);
+    this.wsClient.on('error', this.onError);
+    this.wsClient.on('close', this.onConnectionClosed);
   }
 
   private createConnection() {
@@ -23,68 +31,56 @@ export class StationWebSocket {
     } catch (error) {
       console.log(error);
     }
-
-    this.bindOnMessage();
-    this.bindOnConnectionOpen();
-    this.bindOnDisconnect();
-    this.bindOnError();
   }
 
-  private bindOnMessage() {
-    this.wsClient.on('message', data => {
-      console.log('data received', data);
-    });
+  public onMessage(data: string) {
+    console.log('data received', data);
   }
 
-  private bindOnError() {
-    this.wsClient.on('error', err => {
-      console.log('Error', err);
-    });
+  public onError(err: Error) {
+    console.log('Error', err);
   }
 
-  private bindOnConnectionOpen() {
-    this.wsClient.on('open', () => {
-      this.connectedTime = new Date();
+  public onConnectionOpen() {
+    this.connectedTime = new Date();
 
-      this.pingInterval = setInterval(() => {
-        console.log('pinging server by station', this.station.identity);
-        this.wsClient.ping('ping');
-      }, 60000);
+    this.pingInterval = setInterval(() => {
+      console.log('pinging server by station', this.station.identity);
+      this.wsClient.ping('ping');
+    }, 60000);
 
-      console.log(
-        `connection opened for station ${this.station.identity}, sending Boot`,
-      );
+    console.log(
+      `connection opened for station ${this.station.identity}, sending Boot`,
+    );
 
-      // testing closing
-      // setTimeout(() => {
-      //   if (this.station.identity == 'STATION123') {
-      //     this.wsClient.close(1000, 'Testing');
-      //   }
-      // }, 10000);
-    });
+    // testing closing
+    // setTimeout(() => {
+    //   if (this.station.identity == 'STATION123') {
+    //     this.wsClient.close(1000, 'Testing');
+    //   }
+    // }, 10000);
 
-    this.wsClient.on('pong', () => {
-      console.log('received pong back');
-    });
+    // this.wsClient.on('pong', () => {
+    //   console.log('received pong back');
+    // });
   }
 
-  private bindOnDisconnect() {
-    this.wsClient.on('close', (code: number, reason: string) => {
-      clearInterval(this.pingInterval);
-      const connectedMinutes = Math.floor(
-        (new Date().getTime() - this.connectedTime.getTime()) / 1000 / 60,
-      );
-      const extraConnectedSeconds =
-        ((new Date().getTime() - this.connectedTime.getTime()) / 1000) % 60;
-      console.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
+  public onConnectionClosed(code: number, reason: string) {
+    clearInterval(this.pingInterval);
+
+    const connectedDurationInSeconds =
+      (new Date().getTime() - this.connectedTime.getTime()) / 1000;
+    const connectedMinutes = Math.floor(connectedDurationInSeconds / 60);
+    const extraConnectedSeconds = connectedDurationInSeconds % 60;
+    console.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
 Closing connection ${this.station.identity}. Code: ${code}. Reason: ${reason}.`);
 
-      this.wsClient = null;
+    this.wsClient = null;
 
-      // reconnecting after 1 minute
-      setTimeout(() => {
-        this.createConnection();
-      }, 60000);
-    });
+    // reconnecting after 1 minute
+    setTimeout(() => {
+      this.createConnection();
+      this.bindMethods();
+    }, 60000);
   }
 }
