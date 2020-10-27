@@ -4,9 +4,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import typeOrmConfig = require('./config/typeorm.config');
 import { StationsModule } from './stations/stations.module';
+import { MessageModule } from './message/message.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(typeOrmConfig), StationsModule],
+  imports: [
+    TypeOrmModule.forRoot(typeOrmConfig), //
+    StationsModule,
+    MessageModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

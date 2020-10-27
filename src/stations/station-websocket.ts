@@ -1,4 +1,6 @@
+import { Logger } from '@nestjs/common';
 import * as WebSocket from 'ws';
+import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
 import { Station } from './station.entity';
 
 export class StationWebSocket {
@@ -6,8 +8,11 @@ export class StationWebSocket {
   public wsClient: WebSocket;
   public connectedTime: Date;
   public pingInterval: NodeJS.Timeout;
+  private lastMessageId: number;
+  private logger = new Logger('StationnWebSocket');
   public constructor(station: Station) {
     this.station = station;
+    this.lastMessageId = 0;
 
     this.createConnection();
     this.bindMethods();
@@ -21,37 +26,58 @@ export class StationWebSocket {
   }
 
   private createConnection() {
-    console.log(`creating new connection ${this.station.identity}`);
+    this.logger.log(`creating new connection ${this.station.identity}`);
     const protocols = 'ocpp1.6';
     try {
-      this.wsClient = new WebSocket(
-        `${this.station.centralSystemUrl}/${this.station.identity}`,
-        protocols,
-      );
+      this.wsClient = new WebSocket(`${this.station.centralSystemUrl}/${this.station.identity}`, protocols);
     } catch (error) {
-      console.log(error);
+      this.logger.log(`Error connecting for station ${this.station.identity}: ${error?.message ?? ''}`);
     }
   }
 
-  public onMessage(data: string) {
-    console.log('data received', data);
-  }
+  public getLastMessageId = (): number => this.lastMessageId;
+
+  /**
+   * Generate a uniqueId for Call message
+   */
+  public getMessageIdForCall = (): number => (this.lastMessageId += 1);
+
+  public onMessage = (data: string) => {
+    const parsedMessage = JSON.parse(data);
+    const messageType = parsedMessage[0] as ChargePointMessageTypes;
+    switch (messageType) {
+      case ChargePointMessageTypes.Call: {
+        // remoteStart, remoteStop
+        const [, uniqueId, action, payload] = parsedMessage as [number, string, string, object];
+        this.logger.log(parsedMessage);
+        break;
+      }
+      case ChargePointMessageTypes.CallResult: {
+        const [, reqId, payload] = parsedMessage as [number, string, object];
+        if (reqId === this.getLastMessageId().toString()) {
+          this.logger.log(`Received response for reqId ${this.getLastMessageId} `);
+          this.logger.log(payload);
+        }
+        break;
+      }
+      default:
+        this.logger.log('data does not have correct messageTypeId');
+    }
+  };
 
   public onError(err: Error) {
-    console.log('Error', err);
+    this.logger.error(`Error: ${err?.message ?? ''}`, err.stack ?? '');
   }
 
-  public onConnectionOpen() {
+  public onConnectionOpen = () => {
     this.connectedTime = new Date();
 
     this.pingInterval = setInterval(() => {
-      console.log('pinging server by station', this.station.identity);
+      this.logger.log('pinging server by station', this.station.identity);
       this.wsClient.ping('ping');
     }, 60000);
 
-    console.log(
-      `connection opened for station ${this.station.identity}, sending Boot`,
-    );
+    this.logger.log(`connection opened for station ${this.station.identity}, sending Boot`);
 
     // testing closing
     // setTimeout(() => {
@@ -61,18 +87,17 @@ export class StationWebSocket {
     // }, 10000);
 
     // this.wsClient.on('pong', () => {
-    //   console.log('received pong back');
+    //   this.logger.log('received pong back');
     // });
-  }
+  };
 
-  public onConnectionClosed(code: number, reason: string) {
+  public onConnectionClosed = (code: number, reason: string) => {
     clearInterval(this.pingInterval);
 
-    const connectedDurationInSeconds =
-      (new Date().getTime() - this.connectedTime.getTime()) / 1000;
+    const connectedDurationInSeconds = (new Date().getTime() - this.connectedTime.getTime()) / 1000;
     const connectedMinutes = Math.floor(connectedDurationInSeconds / 60);
     const extraConnectedSeconds = connectedDurationInSeconds % 60;
-    console.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
+    this.logger.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
 Closing connection ${this.station.identity}. Code: ${code}. Reason: ${reason}.`);
 
     this.wsClient = null;
@@ -82,5 +107,5 @@ Closing connection ${this.station.identity}. Code: ${code}. Reason: ${reason}.`)
       this.createConnection();
       this.bindMethods();
     }, 60000);
-  }
+  };
 }
