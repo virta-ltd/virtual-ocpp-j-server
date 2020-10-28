@@ -4,17 +4,18 @@ import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
-import { StationWebSocket } from './station-websocket';
-import { ByChargePointOperationMessageFactory } from '../message/by-charge-point/by-charge-point-operation-message-factory';
+import { StationWebSocketService } from './station-websocket.service';
+import { StationWebSocketClient } from './station-websocket-client';
+import { WebSocketReadyStates } from '../models/WebSocketReadyStates';
 
 @Injectable()
 export class StationsService {
   private logger = new Logger('StationsService');
-  public connectedStations: StationWebSocket[] = [];
+  public connectedStationsClients: Set<StationWebSocketClient> = new Set<StationWebSocketClient>();
   constructor(
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
-    private byChargePointOperationMessageFactory: ByChargePointOperationMessageFactory,
+    private stationWebSocketService: StationWebSocketService,
   ) {}
 
   async getStations(filterDto: GetStationsFilterDto): Promise<Station[]> {
@@ -46,19 +47,10 @@ export class StationsService {
   }
 
   connectStationToCentralSystem(station: Station) {
-    const newStationWebSocketClient = new StationWebSocket(station);
-    this.connectedStations.push(newStationWebSocketClient);
-
-    setTimeout(() => {
-      if (newStationWebSocketClient.wsClient.readyState === 1) {
-        const message = this.byChargePointOperationMessageFactory.createMessage(
-          'BootNotification',
-          station,
-          newStationWebSocketClient.getMessageIdForCall(),
-        );
-        newStationWebSocketClient.wsClient.send(message);
-      }
-    }, 1000);
+    const newStationWebSocketClient = this.stationWebSocketService.createStationWebSocket(station);
+    this.connectedStationsClients.add(newStationWebSocketClient);
+    // console.log(this.connectedStationsClients);
+    // console.log(this.connectedStationsClients.values());
   }
 
   async connectAllStationsToCentralSystem() {
@@ -70,12 +62,16 @@ export class StationsService {
       console.log('Error fetching stations information');
     }
 
-    const connectedStationsIdentity = this.connectedStations.map(
-      client => client.wsClient.readyState === 1 && client.station.identity,
-    );
-    const unconnectedStations = dbStations.filter(
-      dbStation => connectedStationsIdentity.indexOf(dbStation.identity) < 0,
-    );
+    // remove closing / closed sockets
+    this.connectedStationsClients.forEach(client => {
+      if (client.readyState !== WebSocketReadyStates.CONNECTING && client.readyState !== WebSocketReadyStates.OPEN) {
+        this.connectedStationsClients.delete(client);
+      }
+    });
+
+    const connectedStationsIdentity = [...this.connectedStationsClients].map(client => client.stationIdentity);
+
+    const unconnectedStations = dbStations.filter(dbStation => !connectedStationsIdentity.includes(dbStation.identity));
 
     unconnectedStations.forEach(station => this.connectStationToCentralSystem(station));
   }
