@@ -49,8 +49,6 @@ export class StationsService {
   connectStationToCentralSystem(station: Station) {
     const newStationWebSocketClient = this.stationWebSocketService.createStationWebSocket(station);
     this.connectedStationsClients.add(newStationWebSocketClient);
-    // console.log(this.connectedStationsClients);
-    // console.log(this.connectedStationsClients.values());
   }
 
   async connectAllStationsToCentralSystem() {
@@ -59,7 +57,6 @@ export class StationsService {
       dbStations = await this.getStations({});
     } catch (error) {
       this.logger.error(`Error fetching stations information`, error?.stack ?? '');
-      console.log('Error fetching stations information');
     }
 
     // remove closing / closed sockets

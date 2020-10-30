@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { WebSocketReadyStates } from '../models/WebSocketReadyStates';
 import { MessageModule } from '../message/message.module';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
 import { StationWebSocketService } from './station-websocket.service';
@@ -149,7 +150,7 @@ describe('StationsService', () => {
       station2.identity = 'station2';
       const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
       socketForStation2.stationIdentity = station2.identity;
-      socketForStation2.readyState = 1;
+      socketForStation2.readyState = WebSocketReadyStates.OPEN;
 
       stationService.connectedStationsClients.add(socketForStation2);
       stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
@@ -157,7 +158,28 @@ describe('StationsService', () => {
 
       await stationService.connectAllStationsToCentralSystem();
 
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(1);
       expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station1);
+    });
+
+    it('connects all stations to central system url test delete client that has closed connection from connectedStationsClients', async () => {
+      const station1 = new Station();
+      station1.identity = 'station1';
+      const station2 = new Station();
+      station2.identity = 'station2';
+      const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
+      socketForStation2.stationIdentity = station2.identity;
+      socketForStation2.readyState = WebSocketReadyStates.CLOSED;
+
+      stationService.connectedStationsClients.add(socketForStation2);
+      stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
+      stationService.getStations = jest.fn().mockResolvedValue([station1, station2]);
+
+      await stationService.connectAllStationsToCentralSystem();
+
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(2);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station1);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station2);
     });
   });
 });

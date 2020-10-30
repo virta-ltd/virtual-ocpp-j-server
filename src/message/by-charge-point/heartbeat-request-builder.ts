@@ -1,4 +1,3 @@
-import { BootNotifcationRequest } from '../../models/BootNotificationRequest';
 import { ByChargePointRequestBuilderInterface } from './by-charge-point-request-builder-interface';
 import { HeartbeatRequest } from '../../models/HeartbeatRequest';
 
