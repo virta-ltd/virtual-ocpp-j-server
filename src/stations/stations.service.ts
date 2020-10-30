@@ -1,17 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
-import { StationWebSocket } from './station-websocket';
+import { StationWebSocketService } from './station-websocket.service';
+import { StationWebSocketClient } from './station-websocket-client';
+import { WebSocketReadyStates } from '../models/WebSocketReadyStates';
 
 @Injectable()
 export class StationsService {
-  public connectedStations: StationWebSocket[] = [];
+  private logger = new Logger('StationsService');
+  public connectedStationsClients: Set<StationWebSocketClient> = new Set<StationWebSocketClient>();
   constructor(
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
+    private stationWebSocketService: StationWebSocketService,
   ) {}
 
   async getStations(filterDto: GetStationsFilterDto): Promise<Station[]> {
@@ -29,11 +33,9 @@ export class StationsService {
   }
 
   async createStation(createStationDto: CreateOrUpdateStationDto) {
-    const station = await this.stationRepository.createStation(
-      createStationDto,
-    );
+    const station = await this.stationRepository.createStation(createStationDto);
 
-    // station is created, connect them to CS now
+    // station is created, connect it to Central System
     this.connectStationToCentralSystem(station);
     return station;
   }
@@ -45,8 +47,8 @@ export class StationsService {
   }
 
   connectStationToCentralSystem(station: Station) {
-    const newStationWebSocketClient = new StationWebSocket(station);
-    this.connectedStations.push(newStationWebSocketClient);
+    const newStationWebSocketClient = this.stationWebSocketService.createStationWebSocket(station);
+    this.connectedStationsClients.add(newStationWebSocketClient);
   }
 
   async connectAllStationsToCentralSystem() {
@@ -54,18 +56,20 @@ export class StationsService {
     try {
       dbStations = await this.getStations({});
     } catch (error) {
-      console.log('Error fetching stations information');
+      this.logger.error(`Error fetching stations information`, error?.stack ?? '');
     }
 
-    const connectedStationsIdentity = this.connectedStations.map(
-      client => client.wsClient.readyState === 1 && client.station.identity,
-    );
-    const unconnectedStations = dbStations.filter(
-      dbStation => connectedStationsIdentity.indexOf(dbStation.identity) < 0,
-    );
+    // remove closing / closed sockets
+    this.connectedStationsClients.forEach(client => {
+      if (client.readyState !== WebSocketReadyStates.CONNECTING && client.readyState !== WebSocketReadyStates.OPEN) {
+        this.connectedStationsClients.delete(client);
+      }
+    });
 
-    unconnectedStations.forEach(station =>
-      this.connectStationToCentralSystem(station),
-    );
+    const connectedStationsIdentity = [...this.connectedStationsClients].map(client => client.stationIdentity);
+
+    const unconnectedStations = dbStations.filter(dbStation => !connectedStationsIdentity.includes(dbStation.identity));
+
+    unconnectedStations.forEach(station => this.connectStationToCentralSystem(station));
   }
 }

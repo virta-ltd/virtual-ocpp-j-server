@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   ParseIntPipe,
   Post,
@@ -17,6 +18,7 @@ import { StationsService } from './stations.service';
 
 @Controller('stations')
 export class StationsController {
+  private logger = new Logger('StationsController');
   constructor(private stationsService: StationsService) {}
 
   @Get()
@@ -32,17 +34,13 @@ export class StationsController {
 
   @Post()
   @UsePipes(new ValidationPipe({ skipMissingProperties: true }))
-  createStation(
-    @Body() createStationDto: CreateOrUpdateStationDto,
-  ): Promise<Station> {
+  createStation(@Body() createStationDto: CreateOrUpdateStationDto): Promise<Station> {
+    this.logger.log(`Creating new station. Data: ${JSON.stringify(createStationDto)}`);
     return this.stationsService.createStation(createStationDto);
   }
 
   @Put('/:id')
-  updateStation(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateStationDto: CreateOrUpdateStationDto,
-  ) {
+  updateStation(@Param('id', ParseIntPipe) id: number, @Body() updateStationDto: CreateOrUpdateStationDto) {
     return this.stationsService.updateStation(id, updateStationDto);
   }
 }

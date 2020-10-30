@@ -6,21 +6,11 @@ import { Station } from './station.entity';
 @EntityRepository(Station)
 export class StationRepository extends Repository<Station> {
   async createStation(createStationDto: CreateOrUpdateStationDto) {
-    const {
-      identity,
-      centralSystemUrl,
-      meterValue,
-      currentChargingPower,
-    } = createStationDto;
+    const { identity, centralSystemUrl, meterValue, currentChargingPower } = createStationDto;
 
     const station = this.create();
-    station.identity =
-      identity ??
-      `${process.env.DEFAULT_IDENTITY_NAME}${Math.round(
-        Math.random() * 100000,
-      )}`;
-    station.centralSystemUrl =
-      centralSystemUrl ?? `${process.env.DEFAULT_CENTRAL_SYSTEM_URL}`;
+    station.identity = identity ?? `${process.env.DEFAULT_IDENTITY_NAME}${Math.round(Math.random() * 100000)}`;
+    station.centralSystemUrl = centralSystemUrl ?? `${process.env.DEFAULT_CENTRAL_SYSTEM_URL}`;
     station.meterValue = meterValue ?? 0;
     station.currentChargingPower = currentChargingPower ?? 10;
 
@@ -29,16 +19,8 @@ export class StationRepository extends Repository<Station> {
     return station;
   }
 
-  async updateStation(
-    station: Station,
-    updateStationDto: CreateOrUpdateStationDto,
-  ) {
-    const {
-      identity,
-      centralSystemUrl,
-      meterValue,
-      currentChargingPower,
-    } = updateStationDto;
+  async updateStation(station: Station, updateStationDto: CreateOrUpdateStationDto) {
+    const { identity, centralSystemUrl, meterValue, currentChargingPower } = updateStationDto;
 
     station.identity = identity ?? station.identity;
     station.centralSystemUrl = centralSystemUrl ?? station.centralSystemUrl;

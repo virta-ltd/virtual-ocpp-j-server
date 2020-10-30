@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { WebSocketReadyStates } from '../models/WebSocketReadyStates';
+import { MessageModule } from '../message/message.module';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
-import { StationWebSocket } from './station-websocket';
+import { StationWebSocketService } from './station-websocket.service';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
 import { StationsService } from './stations.service';
@@ -16,11 +18,14 @@ const mockStationRepository = () => ({
 
 describe('StationsService', () => {
   let stationService: StationsService;
+  let stationWebSocketService: StationWebSocketService;
   let stationRepository: StationRepository;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [MessageModule],
       providers: [
+        StationWebSocketService,
         StationsService,
         {
           provide: StationRepository,
@@ -30,6 +35,7 @@ describe('StationsService', () => {
     }).compile();
 
     stationService = module.get<StationsService>(StationsService);
+    stationWebSocketService = module.get<StationWebSocketService>(StationWebSocketService);
     stationRepository = module.get<StationRepository>(StationRepository);
   });
 
@@ -113,13 +119,13 @@ describe('StationsService', () => {
 
   describe('station websocket connection', () => {
     it('connects a station its central system url', () => {
-      expect(stationService.connectedStations.length).toStrictEqual(0);
+      expect(stationService.connectedStationsClients.size).toStrictEqual(0);
       const station1 = new Station();
       stationService.connectStationToCentralSystem(station1);
-      expect(stationService.connectedStations.length).toStrictEqual(1);
+      expect(stationService.connectedStationsClients.size).toStrictEqual(1);
       const station2 = new Station();
       stationService.connectStationToCentralSystem(station2);
-      expect(stationService.connectedStations.length).toStrictEqual(2);
+      expect(stationService.connectedStationsClients.size).toStrictEqual(2);
     });
 
     it('connects all stations to central system url', async () => {
@@ -127,19 +133,13 @@ describe('StationsService', () => {
       station1.identity = 'station1';
       const station2 = new Station();
       station2.identity = 'station2';
-      stationService.connectStationToCentralSystem = jest
-        .fn()
-        .mockImplementation();
-      stationService.getStations = jest
-        .fn()
-        .mockResolvedValue([station1, station2]);
+      stationWebSocketService.createStationWebSocket = jest.fn().mockImplementation();
+      stationService.getStations = jest.fn().mockResolvedValue([station1, station2]);
 
       await stationService.connectAllStationsToCentralSystem();
 
       [station1, station2].forEach(station => {
-        expect(
-          stationService.connectStationToCentralSystem,
-        ).toHaveBeenCalledWith(station);
+        expect(stationWebSocketService.createStationWebSocket).toHaveBeenCalledWith(station);
       });
     });
 
@@ -147,22 +147,39 @@ describe('StationsService', () => {
       const station1 = new Station();
       station1.identity = 'station1';
       const station2 = new Station();
-      const socketForStation2 = new StationWebSocket(station2);
-      socketForStation2.wsClient.readyState = 1;
+      station2.identity = 'station2';
+      const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
+      socketForStation2.stationIdentity = station2.identity;
+      socketForStation2.readyState = WebSocketReadyStates.OPEN;
 
-      stationService.connectedStations.push(socketForStation2);
-      stationService.connectStationToCentralSystem = jest
-        .fn()
-        .mockImplementation();
-      stationService.getStations = jest
-        .fn()
-        .mockResolvedValue([station1, station2]);
+      stationService.connectedStationsClients.add(socketForStation2);
+      stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
+      stationService.getStations = jest.fn().mockResolvedValue([station1, station2]);
 
       await stationService.connectAllStationsToCentralSystem();
 
-      expect(
-        stationService.connectStationToCentralSystem,
-      ).toHaveBeenCalledTimes(1);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(1);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station1);
+    });
+
+    it('connects all stations to central system url test delete client that has closed connection from connectedStationsClients', async () => {
+      const station1 = new Station();
+      station1.identity = 'station1';
+      const station2 = new Station();
+      station2.identity = 'station2';
+      const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
+      socketForStation2.stationIdentity = station2.identity;
+      socketForStation2.readyState = WebSocketReadyStates.CLOSED;
+
+      stationService.connectedStationsClients.add(socketForStation2);
+      stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
+      stationService.getStations = jest.fn().mockResolvedValue([station1, station2]);
+
+      await stationService.connectAllStationsToCentralSystem();
+
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(2);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station1);
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station2);
     });
   });
 });
