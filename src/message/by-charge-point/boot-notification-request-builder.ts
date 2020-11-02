@@ -9,4 +9,6 @@ export class BootNotificationRequestBuilder implements ByChargePointRequestBuild
     request.chargePointModel = payload?.model ?? station.model;
     return request;
   }
+
+  getOperationName = () => 'BootNotification';
 }

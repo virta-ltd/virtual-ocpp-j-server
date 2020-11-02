@@ -13,7 +13,7 @@ export class ByChargePointOperationMessageFactory {
     private readonly heartbeatRequestBuidler: HeartbeatRequestBuilder,
   ) {}
 
-  public getRequestBuilder(operationName: string): ByChargePointRequestBuilderInterface {
+  private getRequestBuilder(operationName: string): ByChargePointRequestBuilderInterface {
     switch (operationName.toLowerCase()) {
       case 'bootnotification':
         return this.bootNotificationRequestBuilder;
@@ -27,14 +27,16 @@ export class ByChargePointOperationMessageFactory {
   public createMessage(operationName: string, station: Station, uniqueId: number, payload?: any): string {
     const builder = this.getRequestBuilder(operationName);
 
-    if (builder === null) return;
+    if (builder === null) {
+      return '';
+    }
 
     const chargePointRequest = builder.build(station, payload);
 
     const message = JSON.stringify([
       ChargePointMessageTypes.Call,
       uniqueId.toString(),
-      operationName,
+      builder.getOperationName(),
       chargePointRequest,
     ]);
 

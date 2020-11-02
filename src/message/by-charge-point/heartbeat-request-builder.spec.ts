@@ -6,4 +6,9 @@ describe('HeartbeatRequestBuilder', () => {
     const request = builder.build();
     expect(request).toMatchObject({});
   });
+
+  test('getOperationName method', () => {
+    const builder = new HeartbeatRequestBuilder();
+    expect(builder.getOperationName()).toStrictEqual('Heartbeat');
+  });
 });

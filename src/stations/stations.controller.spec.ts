@@ -11,6 +11,7 @@ const mockStationService = () => ({
   getStationById: jest.fn(),
   createStation: jest.fn(),
   updateStation: jest.fn(),
+  sendStationOperationRequest: jest.fn(),
 });
 
 describe('StationsController', () => {
@@ -72,9 +73,7 @@ describe('StationsController', () => {
       const getStationByIdFn = stationService.getStationById as jest.Mock;
       getStationByIdFn.mockResolvedValue(station1);
 
-      expect(await stationsController.getStationById(station1.id)).toBe(
-        station1,
-      );
+      expect(await stationsController.getStationById(station1.id)).toBe(station1);
       expect(getStationByIdFn).toBeCalledWith(station1.id);
     });
   });
@@ -100,6 +99,16 @@ describe('StationsController', () => {
       stationsController.updateStation(1, dto);
 
       expect(updateStationFn).toBeCalledWith(1, dto);
+    });
+  });
+
+  describe('createStationOperation', () => {
+    test('that sendStationOperationRequest is called from station service', async () => {
+      const sendStationOperationRequestFn = stationService.sendStationOperationRequest as jest.Mock;
+
+      await stationsController.createStationOperation(1, 'Heartbeat', {});
+
+      expect(sendStationOperationRequestFn).toBeCalledWith(1, 'Heartbeat', {});
     });
   });
 });

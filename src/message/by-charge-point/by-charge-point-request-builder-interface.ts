@@ -4,4 +4,6 @@ import { Station } from 'src/stations/station.entity';
 
 export interface ByChargePointRequestBuilderInterface {
   build(station?: Station, payload?: any): ByChargePointRequestTypes;
+
+  getOperationName(): string;
 }

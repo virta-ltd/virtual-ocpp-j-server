@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
@@ -7,6 +7,7 @@ import { StationRepository } from './station.repository';
 import { StationWebSocketService } from './station-websocket.service';
 import { StationWebSocketClient } from './station-websocket-client';
 import { WebSocketReadyStates } from '../models/WebSocketReadyStates';
+import { StationOperationDto } from './dto/station-operation-dto';
 
 @Injectable()
 export class StationsService {
@@ -71,5 +72,24 @@ export class StationsService {
     const unconnectedStations = dbStations.filter(dbStation => !connectedStationsIdentity.includes(dbStation.identity));
 
     unconnectedStations.forEach(station => this.connectStationToCentralSystem(station));
+  }
+
+  async sendStationOperationRequest(id: number, operationName: string, stationOperationDto: StationOperationDto) {
+    const station = await this.getStationById(id);
+
+    const wsClient = [...this.connectedStationsClients].find(st => st.stationIdentity === station.identity);
+
+    if (!wsClient || wsClient.readyState !== WebSocketReadyStates.OPEN) {
+      throw new BadRequestException(`Station WS client not found or not connected! ${wsClient?.readyState}`);
+    }
+
+    const { request, response } = await this.stationWebSocketService.sendMessageToCentralSystem(
+      wsClient,
+      station,
+      operationName,
+      stationOperationDto,
+    );
+
+    return { request, response };
   }
 }

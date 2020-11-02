@@ -5,4 +5,6 @@ export class HeartbeatRequestBuilder implements ByChargePointRequestBuilderInter
   build() {
     return new HeartbeatRequest();
   }
+
+  getOperationName = () => 'Heartbeat';
 }

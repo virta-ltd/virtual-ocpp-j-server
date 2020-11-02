@@ -36,4 +36,9 @@ describe('BootNotificationRequestBuilder', () => {
     expect(request.chargePointModel).toEqual(station.model);
     expect(request.chargePointVendor).toEqual(station.vendor);
   });
+
+  test('getOperationName method', () => {
+    const builder = new BootNotificationRequestBuilder();
+    expect(builder.getOperationName()).toStrictEqual('BootNotification');
+  });
 });
