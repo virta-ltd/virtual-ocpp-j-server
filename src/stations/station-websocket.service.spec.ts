@@ -1,18 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { MessageModule } from '../message/message.module';
 import { StationWebSocketService } from './station-websocket.service';
 import { Station } from './station.entity';
 import { StationWebSocketClient } from './station-websocket-client';
+import { BadRequestException } from '@nestjs/common';
+import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 jest.mock('ws');
 
 describe('StationWebSocketService', () => {
   let station: Station;
   let stationWebSocketService: StationWebSocketService;
+  let mockByChargePointOperationMessageGenerator = {
+    createMessage: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [MessageModule],
-      providers: [StationWebSocketService],
+      providers: [
+        {
+          provide: ByChargePointOperationMessageGenerator,
+          useValue: mockByChargePointOperationMessageGenerator,
+        },
+        StationWebSocketService,
+      ],
     }).compile();
     stationWebSocketService = module.get<StationWebSocketService>(StationWebSocketService);
 
@@ -39,10 +48,44 @@ describe('StationWebSocketService', () => {
     beforeEach(() => {
       stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
     });
-    it('test onMessage function', async () => {
-      const data = 'somedata';
-      // to be tested later
-      // expect(stationWebSocketService.onMessage(stationWebSocketClient, station, data)).toThrowError();
+
+    describe('onMessage function', () => {
+      afterEach(() => {
+        jest.clearAllTimers();
+      });
+      it('test onMessage for CallResult but lastMessageId do not match', () => {
+        stationWebSocketClient.lastMessageId = 1;
+
+        const data = `[3,\"4\",{\"status\":\"Accepted\",\"currentTime\":\"2020-11-01T18:00:11.585620Z\",\"interval\":60}]`;
+
+        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+        expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
+        expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+      });
+
+      it('test onMessage for but does not expect callResult', () => {
+        stationWebSocketClient.lastMessageId = 4;
+
+        const data = `[3,\"4\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+
+        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+        expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
+        expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+      });
+
+      it('test onMessage when expecting callResult', () => {
+        stationWebSocketClient.lastMessageId = 4;
+        stationWebSocketClient.expectingCallResult = true;
+
+        const data = `[3,\"4\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+
+        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+        expect(stationWebSocketClient.expectingCallResult).toBeTruthy();
+        expect(stationWebSocketClient.callResultMessageFromCS).toEqual(data);
+      });
     });
 
     it('test onError function', () => {
@@ -55,14 +98,24 @@ describe('StationWebSocketService', () => {
 
     it('test onOpen function', () => {
       jest.useFakeTimers();
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(
+        `[2,\"10\",\"BootNotification\",{\"chargePointVendor\":\"Virtual\",\"chargePointModel\":\"OCPP-J 1.6\"}]`,
+      );
       stationWebSocketService.onConnectionOpen(stationWebSocketClient, station);
       expect(stationWebSocketClient.stationIdentity).toEqual(station.identity);
       expect(stationWebSocketClient.connectedTime).toBeInstanceOf(Date);
       expect(setInterval).toHaveBeenCalled();
       expect(stationWebSocketClient.heartbeatInterval).not.toBeUndefined();
+      expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
+        'BootNotification',
+        station,
+        stationWebSocketClient.getLastMessageId(),
+      );
+
       const sendFn = jest.spyOn(stationWebSocketClient, 'send');
       expect(sendFn).toHaveBeenNthCalledWith(1, expect.stringContaining('BootNotification'));
 
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(`[2,\"16\",\"Heartbeat\",{}]`);
       jest.runTimersToTime(60000);
 
       expect(sendFn).toHaveBeenLastCalledWith(expect.stringContaining('Heartbeat'));
@@ -75,6 +128,85 @@ describe('StationWebSocketService', () => {
       stationWebSocketService.onConnectionClosed(stationWebSocketClient, station, 1005, 'needs to be closed');
 
       expect(clearInterval).toHaveBeenCalledWith(stationWebSocketClient.heartbeatInterval);
+    });
+  });
+
+  describe('sendMessageToCentralSystem', () => {
+    let stationWebSocketClient: StationWebSocketClient;
+
+    beforeEach(() => {
+      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
+    });
+    it('throws exception if operationName is not correct', async () => {
+      const operationName = 'abc';
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('');
+      expect(
+        stationWebSocketService.sendMessageToCentralSystem(stationWebSocketClient, station, operationName, {}),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('sends message to CentralSystem based on params', async () => {
+      const operationName = 'Heartbeat';
+
+      const callMessage = `[2,"4","Heartbeat",{}]`;
+      const callResultMessage = '[3,"4",{"currentTime":"2020-11-01T18:08:19.170Z"}]';
+
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(callMessage);
+      jest.spyOn(stationWebSocketService, 'waitForMessage').mockResolvedValue(callResultMessage);
+
+      const { request, response } = await stationWebSocketService.sendMessageToCentralSystem(
+        stationWebSocketClient,
+        station,
+        operationName,
+        {},
+      );
+
+      expect(request).toEqual(callMessage);
+      expect(response).toEqual(callResultMessage);
+      expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+      expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
+    });
+  });
+
+  describe('test waitForMessage', () => {
+    let stationWebSocketClient: StationWebSocketClient;
+
+    beforeEach(() => {
+      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
+    });
+
+    afterEach(() => {
+      jest.clearAllTimers();
+    });
+    it('clears interval and returns the callResultMessage when we get callResultMessage', () => {
+      jest.useFakeTimers();
+
+      const message = 'abcdef';
+
+      stationWebSocketService.waitForMessage(stationWebSocketClient).then(result => {
+        expect(result).toEqual(message);
+      });
+      expect(setInterval).toHaveBeenCalledTimes(1);
+
+      stationWebSocketClient.callResultMessageFromCS = message;
+      jest.advanceTimersToNextTimer();
+
+      expect(clearInterval).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears interval and returns null if nothing is returned', () => {
+      jest.useFakeTimers();
+
+      stationWebSocketService.waitForMessage(stationWebSocketClient).then(result => {
+        expect(result).toBeNull();
+      });
+      expect(setInterval).toHaveBeenCalledTimes(1);
+
+      for (let index = 0; index < 101; index++) {
+        jest.advanceTimersToNextTimer();
+      }
+
+      expect(clearInterval).toHaveBeenCalledTimes(1);
     });
   });
 });

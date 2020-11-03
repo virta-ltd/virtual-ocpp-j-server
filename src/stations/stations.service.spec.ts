@@ -6,6 +6,7 @@ import { StationWebSocketService } from './station-websocket.service';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
 import { StationsService } from './stations.service';
+import { BadRequestException } from '@nestjs/common';
 
 jest.mock('ws');
 
@@ -180,6 +181,70 @@ describe('StationsService', () => {
       expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(2);
       expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station1);
       expect(stationService.connectStationToCentralSystem).toHaveBeenCalledWith(station2);
+    });
+
+    it('does not do anything if there is error fetching stations', async () => {
+      stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
+      stationService.getStations = jest.fn().mockRejectedValue(new Error('error fetching stations'));
+
+      await stationService.connectAllStationsToCentralSystem();
+
+      expect(stationService.connectStationToCentralSystem).toHaveBeenCalledTimes(0);
+    });
+  });
+
+  describe('sendStationOperationRequest', () => {
+    it('test that station is not found within connected stations', async () => {
+      const station1 = new Station();
+      station1.id = 1;
+      station1.identity = 'station1';
+
+      stationService.getStationById = jest.fn().mockResolvedValue(station1);
+
+      expect(stationService.sendStationOperationRequest(station1.id, 'Heartbeat', {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('test that station is found within connected stations but connection was closed', async () => {
+      const station1 = new Station();
+      station1.id = 1;
+      station1.identity = 'station1';
+      const socketForStation1 = stationWebSocketService.createStationWebSocket(station1);
+      socketForStation1.stationIdentity = station1.identity;
+      socketForStation1.readyState = WebSocketReadyStates.CLOSED;
+      stationService.connectedStationsClients.add(socketForStation1);
+
+      stationService.getStationById = jest.fn().mockResolvedValue(station1);
+
+      expect(stationService.sendStationOperationRequest(station1.id, 'Heartbeat', {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('test that message is sent when WS client is found', async () => {
+      const station1 = new Station();
+      station1.id = 1;
+      station1.identity = 'station1';
+      const socketForStation1 = stationWebSocketService.createStationWebSocket(station1);
+      socketForStation1.stationIdentity = station1.identity;
+      socketForStation1.readyState = WebSocketReadyStates.OPEN;
+      stationService.connectedStationsClients.add(socketForStation1);
+
+      stationService.getStationById = jest.fn().mockResolvedValue(station1);
+      stationWebSocketService.sendMessageToCentralSystem = jest
+        .fn()
+        .mockResolvedValue({ request: 'req', response: 'res' });
+
+      const { request, response } = await stationService.sendStationOperationRequest(station1.id, 'Heartbeat', {});
+      expect(stationWebSocketService.sendMessageToCentralSystem).toHaveBeenCalledWith(
+        socketForStation1,
+        station1,
+        'Heartbeat',
+        {},
+      );
+      expect(request).toEqual('req');
+      expect(response).toEqual('res');
     });
   });
 });
