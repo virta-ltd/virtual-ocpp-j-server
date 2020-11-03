@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ByChargePointOperationMessageFactory } from '../message/by-charge-point/by-charge-point-operation-message-factory';
+import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
 import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
@@ -13,7 +13,7 @@ export class StationWebSocketService {
   constructor(
     // @InjectRepository(StationRepository)
     // private stationRepository: StationRepository,
-    private byChargePointOperationMessageFactory: ByChargePointOperationMessageFactory,
+    private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
   ) {}
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
@@ -38,7 +38,7 @@ export class StationWebSocketService {
     wsClient.stationIdentity = station.identity;
     wsClient.connectedTime = new Date();
 
-    const bootMessage = this.byChargePointOperationMessageFactory.createMessage(
+    const bootMessage = this.byChargePointOperationMessageGenerator.createMessage(
       'BootNotification',
       station,
       wsClient.getMessageIdForCall(),
@@ -46,7 +46,7 @@ export class StationWebSocketService {
     wsClient.send(bootMessage);
 
     wsClient.heartbeatInterval = setInterval(() => {
-      const message = this.byChargePointOperationMessageFactory.createMessage(
+      const message = this.byChargePointOperationMessageGenerator.createMessage(
         'Heartbeat',
         station,
         wsClient.getMessageIdForCall(),
@@ -102,8 +102,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     operationName: string,
     payload: StationOperationDto,
   ) {
-    this.logger.log('current messageid' + wsClient.getLastMessageId());
-    const message = this.byChargePointOperationMessageFactory.createMessage(
+    const message = this.byChargePointOperationMessageGenerator.createMessage(
       operationName,
       station,
       wsClient.getMessageIdForCall(),

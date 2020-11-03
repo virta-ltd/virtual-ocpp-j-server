@@ -3,13 +3,13 @@ import { StationWebSocketService } from './station-websocket.service';
 import { Station } from './station.entity';
 import { StationWebSocketClient } from './station-websocket-client';
 import { BadRequestException } from '@nestjs/common';
-import { ByChargePointOperationMessageFactory } from '../message/by-charge-point/by-charge-point-operation-message-factory';
+import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 jest.mock('ws');
 
 describe('StationWebSocketService', () => {
   let station: Station;
   let stationWebSocketService: StationWebSocketService;
-  let mockByChargePointOperationMessageFactory = {
+  let mockByChargePointOperationMessageGenerator = {
     createMessage: jest.fn(),
   };
 
@@ -17,8 +17,8 @@ describe('StationWebSocketService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
-          provide: ByChargePointOperationMessageFactory,
-          useValue: mockByChargePointOperationMessageFactory,
+          provide: ByChargePointOperationMessageGenerator,
+          useValue: mockByChargePointOperationMessageGenerator,
         },
         StationWebSocketService,
       ],
@@ -98,7 +98,7 @@ describe('StationWebSocketService', () => {
 
     it('test onOpen function', () => {
       jest.useFakeTimers();
-      mockByChargePointOperationMessageFactory.createMessage.mockReturnValue(
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(
         `[2,\"10\",\"BootNotification\",{\"chargePointVendor\":\"Virtual\",\"chargePointModel\":\"OCPP-J 1.6\"}]`,
       );
       stationWebSocketService.onConnectionOpen(stationWebSocketClient, station);
@@ -106,7 +106,7 @@ describe('StationWebSocketService', () => {
       expect(stationWebSocketClient.connectedTime).toBeInstanceOf(Date);
       expect(setInterval).toHaveBeenCalled();
       expect(stationWebSocketClient.heartbeatInterval).not.toBeUndefined();
-      expect(mockByChargePointOperationMessageFactory.createMessage).toHaveBeenCalledWith(
+      expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
         'BootNotification',
         station,
         stationWebSocketClient.getLastMessageId(),
@@ -115,7 +115,7 @@ describe('StationWebSocketService', () => {
       const sendFn = jest.spyOn(stationWebSocketClient, 'send');
       expect(sendFn).toHaveBeenNthCalledWith(1, expect.stringContaining('BootNotification'));
 
-      mockByChargePointOperationMessageFactory.createMessage.mockReturnValue(`[2,\"16\",\"Heartbeat\",{}]`);
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(`[2,\"16\",\"Heartbeat\",{}]`);
       jest.runTimersToTime(60000);
 
       expect(sendFn).toHaveBeenLastCalledWith(expect.stringContaining('Heartbeat'));
@@ -139,6 +139,7 @@ describe('StationWebSocketService', () => {
     });
     it('throws exception if operationName is not correct', async () => {
       const operationName = 'abc';
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('');
       expect(
         stationWebSocketService.sendMessageToCentralSystem(stationWebSocketClient, station, operationName, {}),
       ).rejects.toThrow(BadRequestException);
@@ -150,7 +151,7 @@ describe('StationWebSocketService', () => {
       const callMessage = `[2,"4","Heartbeat",{}]`;
       const callResultMessage = '[3,"4",{"currentTime":"2020-11-01T18:08:19.170Z"}]';
 
-      mockByChargePointOperationMessageFactory.createMessage.mockReturnValue(callMessage);
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(callMessage);
       jest.spyOn(stationWebSocketService, 'waitForMessage').mockResolvedValue(callResultMessage);
 
       const { request, response } = await stationWebSocketService.sendMessageToCentralSystem(
