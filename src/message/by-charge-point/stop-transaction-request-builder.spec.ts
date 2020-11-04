@@ -13,6 +13,7 @@ describe('StopTransactionRequestBuilder', () => {
 
     station = new Station();
     station.meterValue = 200;
+    station.currentTransactionId = 10;
 
     stopTransactionRequestBuilder = testModule.get<StopTransactionRequestBuilder>(StopTransactionRequestBuilder);
   });
@@ -23,6 +24,15 @@ describe('StopTransactionRequestBuilder', () => {
     const request = stopTransactionRequestBuilder.build(station, payload);
 
     expect(request.transactionId).toEqual(payload.transactionId);
+    expect(request.timestamp).not.toBeNull();
+    expect(request.meterStop).toEqual(station.meterValue);
+  });
+
+  it('test build with data from station if payload does not have transactionId', () => {
+    const payload = {};
+    const request = stopTransactionRequestBuilder.build(station, payload);
+
+    expect(request.transactionId).toEqual(station.currentTransactionId);
     expect(request.timestamp).not.toBeNull();
     expect(request.meterStop).toEqual(station.meterValue);
   });

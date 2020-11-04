@@ -1,18 +1,22 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { StartTransactionResponse } from '../models/StartTransactionResponse';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
+import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
+import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
+import { StopTransactionResponse } from 'src/models/StopTransactionResponse';
 
 @Injectable()
 export class StationWebSocketService {
   private logger = new Logger(StationWebSocketService.name);
   constructor(
-    // @InjectRepository(StationRepository)
-    // private stationRepository: StationRepository,
+    @InjectRepository(StationRepository)
+    private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
   ) {}
 
@@ -117,6 +121,10 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     wsClient.expectingCallResult = true;
 
     const response = await this.waitForMessage(wsClient);
+
+    if (response) {
+      this.checkAndSaveResponseDataToStation(operationName, station, response);
+    }
     wsClient.callResultMessageFromCS = null;
     wsClient.expectingCallResult = false;
 
@@ -153,6 +161,47 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
     if (wsClient.expectingCallResult) {
       wsClient.callResultMessageFromCS = JSON.stringify(parsedMessage);
+    }
+  }
+
+  public checkAndSaveResponseDataToStation(operationName: string, station: Station, response: string) {
+    try {
+      const parsedMessage = JSON.parse(response);
+      const [, , payload] = parsedMessage as [number, string, object];
+      switch (operationName.toLowerCase()) {
+        case 'starttransaction': {
+          const {
+            transactionId,
+            idTagInfo: { status },
+          } = payload as StartTransactionResponse;
+          if (status === IdTagInfoStatusEnum.Accepted && transactionId > 0) {
+            const dto: CreateOrUpdateStationDto = {
+              chargeInProgress: true,
+              currentTransactionId: transactionId,
+            };
+            this.stationRepository.updateStation(station, dto);
+          }
+          break;
+        }
+
+        case 'stoptransaction': {
+          const {
+            idTagInfo: { status },
+          } = payload as StopTransactionResponse;
+          if (status === IdTagInfoStatusEnum.Accepted) {
+            const dto: CreateOrUpdateStationDto = {
+              chargeInProgress: false,
+              currentTransactionId: null,
+            };
+            this.stationRepository.updateStation(station, dto);
+          }
+          break;
+        }
+
+        default:
+      }
+    } catch (error) {
+      this.logger.error(`Error processing response`, error.stack ?? '', error.message ?? '');
     }
   }
 }

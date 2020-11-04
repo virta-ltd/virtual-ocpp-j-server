@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { EntityRepository, Repository } from 'typeorm';
 import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { GetStationsFilterDto } from './dto/get-station-filter.dto';
@@ -20,13 +21,10 @@ export class StationRepository extends Repository<Station> {
   }
 
   async updateStation(station: Station, updateStationDto: CreateOrUpdateStationDto) {
-    const { identity, centralSystemUrl, meterValue, currentChargingPower } = updateStationDto;
-
-    station.identity = identity ?? station.identity;
-    station.centralSystemUrl = centralSystemUrl ?? station.centralSystemUrl;
-    station.meterValue = meterValue ?? station.meterValue;
-    station.currentChargingPower = currentChargingPower ?? currentChargingPower;
-    station.save();
+    Object.keys(updateStationDto).forEach(key => {
+      station[key] = updateStationDto[key];
+    });
+    await station.save();
 
     return station;
   }
