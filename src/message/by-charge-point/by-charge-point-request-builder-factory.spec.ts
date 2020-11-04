@@ -4,6 +4,7 @@ import { BootNotificationRequestBuilder } from './boot-notification-request-buil
 import { ByChargePointRequestBuilderFactory } from './by-charge-point-request-builder-factory';
 import { HeartbeatRequestBuilder } from './heartbeat-request-builder';
 import { StartTransactionRequestBuilder } from './start-transaction-request-builder';
+import { StatusNotificationRequestBuilder } from './status-notification-request-builder';
 import { StopTransactionRequestBuilder } from './stop-transaction-request-builder';
 
 describe('ByChargePointRequestBuilderFactory', () => {
@@ -15,6 +16,7 @@ describe('ByChargePointRequestBuilderFactory', () => {
         HeartbeatRequestBuilder,
         BootNotificationRequestBuilder,
         StartTransactionRequestBuilder,
+        StatusNotificationRequestBuilder,
         StopTransactionRequestBuilder,
         ByChargePointRequestBuilderFactory,
       ],
@@ -30,6 +32,7 @@ describe('ByChargePointRequestBuilderFactory', () => {
     ['heartbeat', 'Heartbeat'],
     ['authorize', 'Authorize'],
     ['starttransaction', 'StartTransaction'],
+    ['statusnotification', 'StatusNotification'],
     ['stoptransaction', 'StopTransaction'],
   ])('getBuilderFromOperationName for operation %s', (name: string, correctOperationName: string) => {
     expect(byChargePointRequestBuilderFactory.getBuilderFromOperationName(name).getOperationName()).toEqual(

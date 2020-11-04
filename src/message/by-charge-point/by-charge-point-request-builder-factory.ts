@@ -4,6 +4,7 @@ import { BootNotificationRequestBuilder } from './boot-notification-request-buil
 import { ByChargePointRequestBuilderInterface } from './by-charge-point-request-builder-interface';
 import { HeartbeatRequestBuilder } from './heartbeat-request-builder';
 import { StartTransactionRequestBuilder } from './start-transaction-request-builder';
+import { StatusNotificationRequestBuilder } from './status-notification-request-builder';
 import { StopTransactionRequestBuilder } from './stop-transaction-request-builder';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class ByChargePointRequestBuilderFactory {
     private readonly bootNotificationRequestBuilder: BootNotificationRequestBuilder,
     private readonly heartbeatRequestBuidler: HeartbeatRequestBuilder,
     private readonly startTransactionRequestBuilder: StartTransactionRequestBuilder,
+    private readonly statusNotificationRequestBuilder: StatusNotificationRequestBuilder,
     private readonly stopTransactionRequestBuilder: StopTransactionRequestBuilder,
   ) {}
 
@@ -26,6 +28,8 @@ export class ByChargePointRequestBuilderFactory {
         return this.authorizeRequestBuilder;
       case 'starttransaction':
         return this.startTransactionRequestBuilder;
+      case 'statusnotification':
+        return this.statusNotificationRequestBuilder;
       case 'stoptransaction':
         return this.stopTransactionRequestBuilder;
       default:

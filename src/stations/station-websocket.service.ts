@@ -123,7 +123,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     const response = await this.waitForMessage(wsClient);
 
     if (response) {
-      this.checkAndSaveResponseDataToStation(operationName, station, response);
+      this.checkAndSaveResponseDataToStation(operationName, station, response, wsClient);
     }
     wsClient.callResultMessageFromCS = null;
     wsClient.expectingCallResult = false;
@@ -164,7 +164,12 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     }
   }
 
-  public checkAndSaveResponseDataToStation(operationName: string, station: Station, response: string) {
+  public checkAndSaveResponseDataToStation(
+    operationName: string,
+    station: Station,
+    response: string,
+    wsClient: StationWebSocketClient,
+  ) {
     try {
       const parsedMessage = JSON.parse(response);
       const [, , payload] = parsedMessage as [number, string, object];
@@ -188,12 +193,21 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
           const {
             idTagInfo: { status },
           } = payload as StopTransactionResponse;
+
           if (status === IdTagInfoStatusEnum.Accepted) {
             const dto: CreateOrUpdateStationDto = {
               chargeInProgress: false,
               currentTransactionId: null,
             };
             this.stationRepository.updateStation(station, dto);
+
+            const availableStatusNotificationMessage = this.byChargePointOperationMessageGenerator.createMessage(
+              'StatusNotification',
+              station,
+              wsClient.getMessageIdForCall(),
+              {},
+            );
+            wsClient.send(availableStatusNotificationMessage);
           }
           break;
         }

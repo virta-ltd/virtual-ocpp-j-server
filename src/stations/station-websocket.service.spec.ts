@@ -64,8 +64,6 @@ describe('StationWebSocketService', () => {
         jest.clearAllTimers();
       });
       it('test onMessage for CallResult but lastMessageId do not match', () => {
-        stationWebSocketClient.lastMessageId = 1;
-
         const data = `[3,\"4\",{\"status\":\"Accepted\",\"currentTime\":\"2020-11-01T18:00:11.585620Z\",\"interval\":60}]`;
 
         stationWebSocketService.onMessage(stationWebSocketClient, station, data);
@@ -75,9 +73,9 @@ describe('StationWebSocketService', () => {
       });
 
       it('test onMessage for but does not expect callResult', () => {
-        stationWebSocketClient.lastMessageId = 4;
+        const messageId = stationWebSocketClient.getMessageIdForCall();
 
-        const data = `[3,\"4\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+        const data = `[3,\"${messageId}\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
 
         stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
@@ -86,10 +84,10 @@ describe('StationWebSocketService', () => {
       });
 
       it('test onMessage when expecting callResult', () => {
-        stationWebSocketClient.lastMessageId = 4;
+        const messageId = stationWebSocketClient.getMessageIdForCall();
         stationWebSocketClient.expectingCallResult = true;
 
-        const data = `[3,\"4\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+        const data = `[3,\"${messageId}\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
 
         stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
@@ -221,13 +219,23 @@ describe('StationWebSocketService', () => {
   });
 
   describe('checkAndSaveResponseDataToStation', () => {
+    let stationWebSocketClient: StationWebSocketClient;
+
+    beforeEach(() => {
+      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
+    });
     describe('Unsupported message Or parse error', () => {
       it('does not do anything if operation is not included', () => {
         const operationName = 'Heartbeat';
 
         const response = `[3,"28",{"currentTime":"2020-11-04T10:00:05.627Z"}]`;
 
-        stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
 
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
@@ -236,7 +244,12 @@ describe('StationWebSocketService', () => {
         const operationName = 'Heartbeat';
         const response = `abc`;
 
-        stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
 
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
@@ -247,14 +260,24 @@ describe('StationWebSocketService', () => {
       it('does nothing if idTagInfo status is Blocked', () => {
         const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
 
       it('does nothing if transactionId is < 0', () => {
         const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
 
@@ -262,33 +285,48 @@ describe('StationWebSocketService', () => {
         const transactionId = 1;
         const response = `[3,"9",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
         expect(stationRepository.updateStation).toHaveBeenCalledWith(
           station,
           expect.objectContaining({ chargeInProgress: true, currentTransactionId: transactionId }),
         );
       });
     });
-  });
 
-  describe('StopTransaction', () => {
-    const operationName = 'StopTransaction';
-    it('does nothing if idTagInfo status is not Accepted', () => {
-      const response = `[3,"15",{"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T09:53:59.031Z"}}]`;
+    describe('StopTransaction', () => {
+      const operationName = 'StopTransaction';
+      it('does nothing if idTagInfo status is not Accepted', () => {
+        const response = `[3,"15",{"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T09:53:59.031Z"}}]`;
 
-      stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
-      expect(stationRepository.updateStation).not.toHaveBeenCalled();
-    });
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
+        expect(stationRepository.updateStation).not.toHaveBeenCalled();
+      });
 
-    it('update station chargeInProgress & currentTransactionId if status is Accepted', () => {
-      const response = `[3,"24",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
+      it('update station chargeInProgress & currentTransactionId if status is Accepted', () => {
+        const response = `[3,"24",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
 
-      stationWebSocketService.checkAndSaveResponseDataToStation(operationName, station, response);
+        stationWebSocketService.checkAndSaveResponseDataToStation(
+          operationName,
+          station,
+          response,
+          stationWebSocketClient,
+        );
 
-      expect(stationRepository.updateStation).toHaveBeenCalledWith(
-        station,
-        expect.objectContaining({ chargeInProgress: false, currentTransactionId: null }),
-      );
+        expect(stationRepository.updateStation).toHaveBeenCalledWith(
+          station,
+          expect.objectContaining({ chargeInProgress: false, currentTransactionId: null }),
+        );
+      });
     });
   });
 });

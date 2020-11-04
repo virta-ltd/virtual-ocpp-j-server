@@ -5,6 +5,7 @@ import { ByChargePointOperationMessageGenerator } from './by-charge-point/by-cha
 import { ByChargePointRequestBuilderFactory } from './by-charge-point/by-charge-point-request-builder-factory';
 import { HeartbeatRequestBuilder } from './by-charge-point/heartbeat-request-builder';
 import { StartTransactionRequestBuilder } from './by-charge-point/start-transaction-request-builder';
+import { StatusNotificationRequestBuilder } from './by-charge-point/status-notification-request-builder';
 import { StopTransactionRequestBuilder } from './by-charge-point/stop-transaction-request-builder';
 
 @Module({
@@ -15,6 +16,7 @@ import { StopTransactionRequestBuilder } from './by-charge-point/stop-transactio
     BootNotificationRequestBuilder,
     HeartbeatRequestBuilder,
     StartTransactionRequestBuilder,
+    StatusNotificationRequestBuilder,
     StopTransactionRequestBuilder,
     ByChargePointRequestBuilderFactory,
     ByChargePointOperationMessageGenerator,
