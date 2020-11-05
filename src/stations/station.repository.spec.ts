@@ -34,7 +34,7 @@ describe('StationRepository', () => {
       expect(station.identity).toContain(process.env.DEFAULT_IDENTITY_NAME);
       expect(station.centralSystemUrl).toEqual(process.env.DEFAULT_CENTRAL_SYSTEM_URL);
       expect(station.meterValue).toEqual(0);
-      expect(station.currentChargingPower).toEqual(10);
+      expect(station.currentChargingPower).toEqual(11000);
     });
 
     it('creates station with provided data', async () => {

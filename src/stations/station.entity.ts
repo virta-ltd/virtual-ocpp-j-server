@@ -27,5 +27,5 @@ export class Station extends BaseEntity {
   currentTransactionId: number = null;
 
   @Column()
-  currentChargingPower: number = 16;
+  currentChargingPower: number = 11000;
 }

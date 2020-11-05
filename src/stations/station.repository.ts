@@ -13,7 +13,7 @@ export class StationRepository extends Repository<Station> {
     station.identity = identity ?? `${process.env.DEFAULT_IDENTITY_NAME}${Math.round(Math.random() * 100000)}`;
     station.centralSystemUrl = centralSystemUrl ?? `${process.env.DEFAULT_CENTRAL_SYSTEM_URL}`;
     station.meterValue = meterValue ?? 0;
-    station.currentChargingPower = currentChargingPower ?? 10;
+    station.currentChargingPower = currentChargingPower ?? 11000;
 
     await station.save();
 

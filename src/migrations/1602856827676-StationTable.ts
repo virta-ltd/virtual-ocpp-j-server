@@ -56,7 +56,7 @@ export class StationTable1602856827676 implements MigrationInterface {
             name: 'currentChargingPower',
             type: 'int',
             isNullable: false,
-            default: 16,
+            default: 11000,
           },
         ],
       }),
