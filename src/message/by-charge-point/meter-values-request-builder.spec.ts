@@ -20,13 +20,13 @@ describe('MeterValuesRequestBuilder', () => {
 
   it('builds default value', () => {
     const request = meterValuesRequestBuilder.build(station, {});
-    const meterValue = request.metervalue[0];
+    const meterValue = request.meterValue[0];
     expect(meterValue).not.toBeNull();
-    expect(meterValue.sampledValue.value).toEqual(station.meterValue);
-    expect(meterValue.sampledValue.context).toEqual(ReadingContext.SamplePeriodic);
-    expect(meterValue.sampledValue.measureand).toEqual(Measurand.EnergyActiveImportRegister);
-    expect(meterValue.sampledValue.unit).toEqual(UnitOfMeasure.Wh);
-    expect(meterValue.sampledValue.location).toEqual(Location.Outlet);
+    expect(meterValue.sampledValue[0].value).toEqual(station.meterValue);
+    expect(meterValue.sampledValue[0].context).toEqual(ReadingContext.SamplePeriodic);
+    expect(meterValue.sampledValue[0].measureand).toEqual(Measurand.EnergyActiveImportRegister);
+    expect(meterValue.sampledValue[0].unit).toEqual(UnitOfMeasure.Wh);
+    expect(meterValue.sampledValue[0].location).toEqual(Location.Outlet);
     expect(request.connectorId).toBe(1);
     expect(request.transactionId).toBeUndefined();
   });
@@ -41,13 +41,13 @@ describe('MeterValuesRequestBuilder', () => {
     };
     station.currentTransactionId = 20;
     const request = meterValuesRequestBuilder.build(station, payload);
-    const meterValue = request.metervalue[0];
+    const meterValue = request.meterValue[0];
     expect(meterValue).not.toBeNull();
-    expect(meterValue.sampledValue.value).toEqual(payload.value);
-    expect(meterValue.sampledValue.context).toEqual(payload.context);
-    expect(meterValue.sampledValue.measureand).toEqual(payload.measureand);
-    expect(meterValue.sampledValue.unit).toEqual(payload.unit);
-    expect(meterValue.sampledValue.location).toEqual(payload.location);
+    expect(meterValue.sampledValue[0].value).toEqual(payload.value);
+    expect(meterValue.sampledValue[0].context).toEqual(payload.context);
+    expect(meterValue.sampledValue[0].measureand).toEqual(payload.measureand);
+    expect(meterValue.sampledValue[0].unit).toEqual(payload.unit);
+    expect(meterValue.sampledValue[0].location).toEqual(payload.location);
     expect(request.transactionId).toBe(20);
   });
 

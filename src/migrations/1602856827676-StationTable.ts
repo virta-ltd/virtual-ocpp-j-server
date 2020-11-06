@@ -58,6 +58,19 @@ export class StationTable1602856827676 implements MigrationInterface {
             isNullable: false,
             default: 11000,
           },
+          {
+            name: 'createdAt',
+            type: 'timestamp',
+            isNullable: false,
+            default: 'CURRENT_TIMESTAMP',
+          },
+          {
+            name: 'updatedAt',
+            type: 'timestamp',
+            isNullable: false,
+            default: 'CURRENT_TIMESTAMP',
+            onUpdate: 'CURRENT_TIMESTAMP',
+          },
         ],
       }),
     );

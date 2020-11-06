@@ -15,7 +15,7 @@ export class ByChargePointOperationMessageGenerator {
       return '';
     }
 
-    const chargePointRequest = builder.build(station, payload);
+    const chargePointRequest = builder.build(station, payload ?? {});
 
     const message = JSON.stringify([
       ChargePointMessageTypes.Call,

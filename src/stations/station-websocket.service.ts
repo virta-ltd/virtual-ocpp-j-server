@@ -9,7 +9,8 @@ import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
 import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
-import { StopTransactionResponse } from 'src/models/StopTransactionResponse';
+import { StopTransactionResponse } from '../models/StopTransactionResponse';
+import { calculatePowerUsageInWh } from './utils';
 
 @Injectable()
 export class StationWebSocketService {
@@ -50,6 +51,9 @@ export class StationWebSocketService {
     wsClient.send(bootMessage);
 
     wsClient.heartbeatInterval = setInterval(() => {
+      // do not send heartbeat if meterValue is being sent
+      if (wsClient.meterValueInterval) return;
+
       const message = this.byChargePointOperationMessageGenerator.createMessage(
         'Heartbeat',
         station,
@@ -58,8 +62,32 @@ export class StationWebSocketService {
       wsClient.send(message);
     }, 60000);
 
+    if (station.chargeInProgress) {
+      this.createMeterValueInterval(wsClient, station);
+    }
+
     // TODO: ping the server if heartbeat is more than 5 mins
   };
+
+  private createMeterValueInterval(wsClient: StationWebSocketClient, station: Station) {
+    // clear any stuck interval
+    clearInterval(wsClient.meterValueInterval);
+
+    wsClient.meterValueInterval = setInterval(async () => {
+      await station.reload();
+      station.meterValue =
+        station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+      await station.save();
+
+      const message = this.byChargePointOperationMessageGenerator.createMessage(
+        'MeterValues',
+        station,
+        wsClient.getMessageIdForCall(),
+        { value: station.meterValue },
+      );
+      wsClient.send(message);
+    }, 60000);
+  }
 
   public onMessage = (wsClient: StationWebSocketClient, _: Station, data: string) => {
     this.logger.log('Received message', data);
@@ -123,7 +151,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     const response = await this.waitForMessage(wsClient);
 
     if (response) {
-      this.checkAndSaveResponseDataToStation(operationName, station, response, wsClient);
+      this.processCallResultMsgFromCS(operationName, station, response, wsClient);
     }
     wsClient.callResultMessageFromCS = null;
     wsClient.expectingCallResult = false;
@@ -164,7 +192,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     }
   }
 
-  public checkAndSaveResponseDataToStation(
+  public processCallResultMsgFromCS(
     operationName: string,
     station: Station,
     response: string,
@@ -185,6 +213,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
               currentTransactionId: transactionId,
             };
             this.stationRepository.updateStation(station, dto);
+            this.createMeterValueInterval(wsClient, station);
           }
           break;
         }
@@ -195,6 +224,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
           } = payload as StopTransactionResponse;
 
           if (status === IdTagInfoStatusEnum.Accepted) {
+            clearInterval(wsClient.meterValueInterval);
             const dto: CreateOrUpdateStationDto = {
               chargeInProgress: false,
               currentTransactionId: null,
