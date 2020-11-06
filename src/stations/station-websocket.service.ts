@@ -1,18 +1,23 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { StartTransactionResponse } from '../models/StartTransactionResponse';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
+import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
+import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
+import { StopTransactionResponse } from '../models/StopTransactionResponse';
+import { calculatePowerUsageInWh } from './utils';
 
 @Injectable()
 export class StationWebSocketService {
   private logger = new Logger(StationWebSocketService.name);
   constructor(
-    // @InjectRepository(StationRepository)
-    // private stationRepository: StationRepository,
+    @InjectRepository(StationRepository)
+    private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
   ) {}
 
@@ -46,6 +51,9 @@ export class StationWebSocketService {
     wsClient.send(bootMessage);
 
     wsClient.heartbeatInterval = setInterval(() => {
+      // do not send heartbeat if meterValue is being sent
+      if (wsClient.meterValueInterval) return;
+
       const message = this.byChargePointOperationMessageGenerator.createMessage(
         'Heartbeat',
         station,
@@ -54,8 +62,32 @@ export class StationWebSocketService {
       wsClient.send(message);
     }, 60000);
 
+    if (station.chargeInProgress) {
+      this.createMeterValueInterval(wsClient, station);
+    }
+
     // TODO: ping the server if heartbeat is more than 5 mins
   };
+
+  private createMeterValueInterval(wsClient: StationWebSocketClient, station: Station) {
+    // clear any stuck interval
+    clearInterval(wsClient.meterValueInterval);
+
+    wsClient.meterValueInterval = setInterval(async () => {
+      await station.reload();
+      station.meterValue =
+        station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+      await station.save();
+
+      const message = this.byChargePointOperationMessageGenerator.createMessage(
+        'MeterValues',
+        station,
+        wsClient.getMessageIdForCall(),
+        { value: station.meterValue },
+      );
+      wsClient.send(message);
+    }, 60000);
+  }
 
   public onMessage = (wsClient: StationWebSocketClient, _: Station, data: string) => {
     this.logger.log('Received message', data);
@@ -117,6 +149,10 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     wsClient.expectingCallResult = true;
 
     const response = await this.waitForMessage(wsClient);
+
+    if (response) {
+      this.processCallResultMsgFromCS(operationName, station, response, wsClient);
+    }
     wsClient.callResultMessageFromCS = null;
     wsClient.expectingCallResult = false;
 
@@ -153,6 +189,63 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
     if (wsClient.expectingCallResult) {
       wsClient.callResultMessageFromCS = JSON.stringify(parsedMessage);
+    }
+  }
+
+  public processCallResultMsgFromCS(
+    operationName: string,
+    station: Station,
+    response: string,
+    wsClient: StationWebSocketClient,
+  ) {
+    try {
+      const parsedMessage = JSON.parse(response);
+      const [, , payload] = parsedMessage as [number, string, object];
+      switch (operationName.toLowerCase()) {
+        case 'starttransaction': {
+          const {
+            transactionId,
+            idTagInfo: { status },
+          } = payload as StartTransactionResponse;
+          if (status === IdTagInfoStatusEnum.Accepted && transactionId > 0) {
+            const dto: CreateOrUpdateStationDto = {
+              chargeInProgress: true,
+              currentTransactionId: transactionId,
+            };
+            this.stationRepository.updateStation(station, dto);
+            this.createMeterValueInterval(wsClient, station);
+          }
+          break;
+        }
+
+        case 'stoptransaction': {
+          const {
+            idTagInfo: { status },
+          } = payload as StopTransactionResponse;
+
+          if (status === IdTagInfoStatusEnum.Accepted) {
+            clearInterval(wsClient.meterValueInterval);
+            const dto: CreateOrUpdateStationDto = {
+              chargeInProgress: false,
+              currentTransactionId: null,
+            };
+            this.stationRepository.updateStation(station, dto);
+
+            const availableStatusNotificationMessage = this.byChargePointOperationMessageGenerator.createMessage(
+              'StatusNotification',
+              station,
+              wsClient.getMessageIdForCall(),
+              {},
+            );
+            wsClient.send(availableStatusNotificationMessage);
+          }
+          break;
+        }
+
+        default:
+      }
+    } catch (error) {
+      this.logger.error(`Error processing response`, error.stack ?? '', error.message ?? '');
     }
   }
 }

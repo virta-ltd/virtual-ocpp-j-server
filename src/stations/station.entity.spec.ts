@@ -13,6 +13,6 @@ describe('Station entity', () => {
     expect(station.model).toBe(process.env.DEFAULT_MODEL);
     expect(station.vendor).toBe(process.env.DEFAULT_VENDOR);
     expect(station.meterValue).toBe(0);
-    expect(station.currentChargingPower).toBe(16);
+    expect(station.currentChargingPower).toBe(11000);
   });
 });

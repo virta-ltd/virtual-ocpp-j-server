@@ -1,4 +1,4 @@
-import { IsInt, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsString } from 'class-validator';
 
 export class CreateOrUpdateStationDto {
   @IsString()
@@ -12,4 +12,10 @@ export class CreateOrUpdateStationDto {
 
   @IsInt()
   currentChargingPower?: number;
+
+  @IsBoolean()
+  chargeInProgress?: boolean;
+
+  @IsInt()
+  currentTransactionId?: number;
 }

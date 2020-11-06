@@ -1,4 +1,4 @@
-import { BaseEntity, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { BaseEntity, Column, Entity, PrimaryGeneratedColumn, Timestamp } from 'typeorm';
 
 @Entity()
 export class Station extends BaseEntity {
@@ -27,5 +27,11 @@ export class Station extends BaseEntity {
   currentTransactionId: number = null;
 
   @Column()
-  currentChargingPower: number = 16;
+  currentChargingPower: number = 11000;
+
+  @Column()
+  createdAt: Date;
+
+  @Column()
+  updatedAt: Date;
 }

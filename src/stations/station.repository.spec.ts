@@ -32,11 +32,9 @@ describe('StationRepository', () => {
 
       expect(saveFn).toHaveBeenCalled();
       expect(station.identity).toContain(process.env.DEFAULT_IDENTITY_NAME);
-      expect(station.centralSystemUrl).toEqual(
-        process.env.DEFAULT_CENTRAL_SYSTEM_URL,
-      );
+      expect(station.centralSystemUrl).toEqual(process.env.DEFAULT_CENTRAL_SYSTEM_URL);
       expect(station.meterValue).toEqual(0);
-      expect(station.currentChargingPower).toEqual(10);
+      expect(station.currentChargingPower).toEqual(11000);
     });
 
     it('creates station with provided data', async () => {
@@ -59,24 +57,29 @@ describe('StationRepository', () => {
 
   describe('updateStation', () => {
     let saveFn: jest.Mock;
+    let station: Station;
 
     beforeEach(() => {
       saveFn = jest.fn();
       saveFn.mockResolvedValue(undefined);
-    });
-    it('updates station to new value', async () => {
-      const station = new Station();
+
+      station = new Station();
       station.identity = 'ABCDEF';
       station.meterValue = 10;
       station.currentChargingPower = 20;
       station.centralSystemUrl = 'ws://abc';
+      station.chargeInProgress = false;
+      station.currentTransactionId = null;
       station.save = saveFn;
-
+    });
+    it('updates station to new value', async () => {
       const dto: CreateOrUpdateStationDto = {
         identity: 'NEW_STATION',
         centralSystemUrl: 'ws://someurl',
         meterValue: 200,
         currentChargingPower: 2000,
+        chargeInProgress: true,
+        currentTransactionId: 1000,
       };
 
       await stationRepository.updateStation(station, dto);
@@ -86,38 +89,21 @@ describe('StationRepository', () => {
       expect(station.centralSystemUrl).toEqual(dto.centralSystemUrl);
       expect(station.meterValue).toEqual(dto.meterValue);
       expect(station.currentChargingPower).toEqual(dto.currentChargingPower);
+      expect(station.chargeInProgress).toEqual(dto.chargeInProgress);
+      expect(station.currentTransactionId).toEqual(dto.currentTransactionId);
     });
-  });
 
-  describe('updateStation', () => {
-    let saveFn: jest.Mock;
-
-    beforeEach(() => {
-      saveFn = jest.fn();
-      saveFn.mockResolvedValue(undefined);
-    });
-    it('updates station to new value', async () => {
-      const station = new Station();
-      station.identity = 'ABCDEF';
-      station.meterValue = 10;
-      station.currentChargingPower = 20;
-      station.centralSystemUrl = 'ws://abc';
-      station.save = saveFn;
-
+    it('updates station to new value with only certain values', async () => {
       const dto: CreateOrUpdateStationDto = {
-        identity: 'NEW_STATION',
-        centralSystemUrl: 'ws://someurl',
-        meterValue: 200,
-        currentChargingPower: 2000,
+        chargeInProgress: true,
+        currentTransactionId: 1000,
       };
 
       await stationRepository.updateStation(station, dto);
 
       expect(saveFn).toHaveBeenCalled();
-      expect(station.identity).toEqual(dto.identity);
-      expect(station.centralSystemUrl).toEqual(dto.centralSystemUrl);
-      expect(station.meterValue).toEqual(dto.meterValue);
-      expect(station.currentChargingPower).toEqual(dto.currentChargingPower);
+      expect(station.chargeInProgress).toEqual(dto.chargeInProgress);
+      expect(station.currentTransactionId).toEqual(dto.currentTransactionId);
     });
   });
 
@@ -130,9 +116,7 @@ describe('StationRepository', () => {
         andWhere: jest.fn(),
         getMany: jest.fn(),
       };
-      createQueryBuilderFn = jest
-        .spyOn(stationRepository, 'createQueryBuilder')
-        .mockReturnValue(mockQuery);
+      createQueryBuilderFn = jest.spyOn(stationRepository, 'createQueryBuilder').mockReturnValue(mockQuery);
     });
     it('returns all station with query builder', async () => {
       const station = new Station();
@@ -154,12 +138,9 @@ describe('StationRepository', () => {
 
       expect(stations).toEqual([station]);
       expect(createQueryBuilderFn).toHaveBeenCalledWith('station');
-      expect(mockQuery.andWhere).toHaveBeenCalledWith(
-        'station.identity like :identity',
-        {
-          identity: `%${dto.identity}%`,
-        },
-      );
+      expect(mockQuery.andWhere).toHaveBeenCalledWith('station.identity like :identity', {
+        identity: `%${dto.identity}%`,
+      });
       expect(mockQuery.getMany).toHaveBeenCalled();
     });
   });

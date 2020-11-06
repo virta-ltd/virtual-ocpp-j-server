@@ -5,7 +5,7 @@ import { StopTransactionRequest } from '../../models/StopTransactionRequest';
 export class StopTransactionRequestBuilder implements ByChargePointRequestBuilderInterface {
   build(station: Station, payload: any): StopTransactionRequest {
     const request = new StopTransactionRequest();
-    request.transactionId = payload?.transactionId;
+    request.transactionId = payload.transactionId ?? station.currentTransactionId;
     request.meterStop = station.meterValue;
     request.timestamp = new Date().toISOString();
     return request;

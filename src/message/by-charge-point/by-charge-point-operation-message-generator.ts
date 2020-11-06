@@ -6,9 +6,7 @@ import { ByChargePointRequestBuilderFactory } from './by-charge-point-request-bu
 @Injectable()
 export class ByChargePointOperationMessageGenerator {
   private logger = new Logger(ByChargePointOperationMessageGenerator.name);
-  constructor(
-    private readonly byChargePointRequestBuilderFactory: ByChargePointRequestBuilderFactory, // private readonly bootNotificationRequestBuilder: BootNotificationRequestBuilder,
-  ) {}
+  constructor(private readonly byChargePointRequestBuilderFactory: ByChargePointRequestBuilderFactory) {}
 
   public createMessage(operationName: string, station: Station, uniqueId: number, payload?: any): string {
     const builder = this.byChargePointRequestBuilderFactory.getBuilderFromOperationName(operationName);
@@ -17,7 +15,7 @@ export class ByChargePointOperationMessageGenerator {
       return '';
     }
 
-    const chargePointRequest = builder.build(station, payload);
+    const chargePointRequest = builder.build(station, payload ?? {});
 
     const message = JSON.stringify([
       ChargePointMessageTypes.Call,
