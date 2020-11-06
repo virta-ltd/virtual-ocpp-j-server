@@ -89,7 +89,7 @@ export class StationWebSocketService {
     }, 60000);
   }
 
-  public onMessage = (wsClient: StationWebSocketClient, _: Station, data: string) => {
+  public onMessage = (wsClient: StationWebSocketClient, station: Station, data: string) => {
     this.logger.log('Received message', data);
     let parsedMessage: any;
     parsedMessage = JSON.parse(data);
@@ -104,7 +104,7 @@ export class StationWebSocketService {
         break;
       }
       case ChargePointMessageTypes.CallResult: {
-        this.processCallResultMessage(wsClient, parsedMessage);
+        this.processCallResultMsgFromCS(wsClient.callMessageOperationFromStation, station, data, wsClient);
         break;
       }
       default:
@@ -181,17 +181,6 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     });
   };
 
-  private processCallResultMessage(wsClient: StationWebSocketClient, parsedMessage: any) {
-    const [, reqId, payload] = parsedMessage as [number, string, object];
-    if (reqId.toString() !== wsClient.getLastMessageId().toString()) return;
-
-    this.logger.log(`Received response for reqId ${wsClient.getLastMessageId()}: ${JSON.stringify(payload)}`);
-
-    if (wsClient.expectingCallResult) {
-      wsClient.callResultMessageFromCS = JSON.stringify(parsedMessage);
-    }
-  }
-
   public processCallResultMsgFromCS(
     operationName: string,
     station: Station,
@@ -200,7 +189,10 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
   ) {
     try {
       const parsedMessage = JSON.parse(response);
-      const [, , payload] = parsedMessage as [number, string, object];
+      const [, reqId, payload] = parsedMessage as [number, string, object];
+      if (reqId.toString() !== wsClient.lastMessageId.toString()) return;
+      this.logger.log(`Received response for reqId ${wsClient.lastMessageId}: ${response}`);
+
       switch (operationName.toLowerCase()) {
         case 'starttransaction': {
           const {
@@ -244,8 +236,15 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
         default:
       }
+
+      wsClient.callResultMessageFromCS = wsClient.expectingCallResult ? response : null;
     } catch (error) {
       this.logger.error(`Error processing response`, error.stack ?? '', error.message ?? '');
     }
+  }
+
+  public sendMessageToCS(wsClient: StationWebSocketClient, operationName: string) {
+    wsClient.callMessageOperationFromStation = operationName;
+    wsClient.send(wsClient);
   }
 }

@@ -5,6 +5,7 @@ import { StationWebSocketClient } from './station-websocket-client';
 import { BadRequestException } from '@nestjs/common';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { StationRepository } from './station.repository';
+// @ts-ignore
 import * as utils from './utils';
 jest.mock('ws');
 
@@ -122,7 +123,7 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
         'BootNotification',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
       );
 
       const sendFn = jest.spyOn(stationWebSocketClient, 'send');
@@ -151,7 +152,7 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
         'BootNotification',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
       );
 
       expect(setInterval).toHaveBeenCalledTimes(2);
@@ -164,7 +165,7 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenLastCalledWith(
         'MeterValues',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
         expect.objectContaining({ value: station.meterValue }),
       );
     });
@@ -313,8 +314,9 @@ describe('StationWebSocketService', () => {
         station.updatedAt = new Date();
         station.reload = jest.fn().mockResolvedValue(station);
         station.save = jest.fn().mockResolvedValue(station);
+        const messageId = stationWebSocketClient.getMessageIdForCall();
         const transactionId = 1;
-        const response = `[3,"9",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
+        const response = `[3,"${messageId}",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
         stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
         expect(stationRepository.updateStation).toHaveBeenCalledWith(
@@ -336,7 +338,7 @@ describe('StationWebSocketService', () => {
         expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
           'MeterValues',
           station,
-          stationWebSocketClient.getLastMessageId(),
+          stationWebSocketClient.lastMessageId,
           { value: station.meterValue },
         );
         expect(stationWebSocketClient.send).toHaveBeenCalledWith(message);
@@ -353,7 +355,8 @@ describe('StationWebSocketService', () => {
       });
 
       it('update station chargeInProgress & currentTransactionId if status is Accepted', () => {
-        const response = `[3,"24",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
+        const messageId = stationWebSocketClient.getMessageIdForCall();
+        const response = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
 
         stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
 
