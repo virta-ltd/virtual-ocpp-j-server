@@ -163,8 +163,8 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
   public waitForMessage = (wsClient: StationWebSocketClient): Promise<string | null> => {
     return new Promise<string | null>(resolve => {
-      const maxNumberOfAttemps = 100;
-      const intervalTime = 100; // can reduced to even 1, need to think how much time we want to loop for answers
+      const maxNumberOfAttemps = 50;
+      const intervalTime = 200;
 
       let currentAttemp = 0;
 
@@ -177,7 +177,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
           clearInterval(interval);
           return resolve(wsClient.callResultMessageFromCS);
         }
-        this.logger.log('Message not yet received, checking for more');
+        this.logger.debug('Message not yet received, checking for more');
         currentAttemp++;
       }, intervalTime);
     });
