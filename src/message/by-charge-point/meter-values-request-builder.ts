@@ -11,7 +11,7 @@ export class MeterValuesRequestBuilder implements ByChargePointRequestBuilderInt
     const sampledValue = new SampledValue();
     sampledValue.value = payload.value ?? station.meterValue;
     sampledValue.context = payload.context ?? ReadingContext.SamplePeriodic;
-    sampledValue.measureand = payload.measureand ?? Measurand.EnergyActiveImportRegister;
+    sampledValue.measurand = payload.measurand ?? Measurand.EnergyActiveImportRegister;
     sampledValue.unit = payload.unit ?? UnitOfMeasure.Wh;
     sampledValue.location = payload.location ?? Location.Outlet;
 

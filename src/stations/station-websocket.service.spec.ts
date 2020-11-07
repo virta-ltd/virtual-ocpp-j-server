@@ -5,6 +5,7 @@ import { StationWebSocketClient } from './station-websocket-client';
 import { BadRequestException } from '@nestjs/common';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { StationRepository } from './station.repository';
+// @ts-ignore
 import * as utils from './utils';
 jest.mock('ws');
 
@@ -122,16 +123,18 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
         'BootNotification',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
       );
 
       const sendFn = jest.spyOn(stationWebSocketClient, 'send');
       expect(sendFn).toHaveBeenNthCalledWith(1, expect.stringContaining('BootNotification'));
+      expect(stationWebSocketClient.callMessageOperationFromStation).toEqual('BootNotification');
 
       mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(`[2,\"16\",\"Heartbeat\",{}]`);
       jest.runTimersToTime(60000);
 
       expect(sendFn).toHaveBeenLastCalledWith(expect.stringContaining('Heartbeat'));
+      expect(stationWebSocketClient.callMessageOperationFromStation).toEqual('Heartbeat');
     });
 
     it('creates meterValueInterval and does not send heartbeat when charge is in progress', async () => {
@@ -151,7 +154,7 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
         'BootNotification',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
       );
 
       expect(setInterval).toHaveBeenCalledTimes(2);
@@ -164,7 +167,7 @@ describe('StationWebSocketService', () => {
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenLastCalledWith(
         'MeterValues',
         station,
-        stationWebSocketClient.getLastMessageId(),
+        stationWebSocketClient.lastMessageId,
         expect.objectContaining({ value: station.meterValue }),
       );
     });
@@ -179,7 +182,7 @@ describe('StationWebSocketService', () => {
     });
   });
 
-  describe('sendMessageToCentralSystem', () => {
+  describe('prepareAndSendMessageToCentralSystem', () => {
     let stationWebSocketClient: StationWebSocketClient;
 
     beforeEach(() => {
@@ -189,7 +192,12 @@ describe('StationWebSocketService', () => {
       const operationName = 'abc';
       mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('');
       expect(
-        stationWebSocketService.sendMessageToCentralSystem(stationWebSocketClient, station, operationName, {}),
+        stationWebSocketService.prepareAndSendMessageToCentralSystem(
+          stationWebSocketClient,
+          station,
+          operationName,
+          {},
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -202,7 +210,7 @@ describe('StationWebSocketService', () => {
       mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(callMessage);
       jest.spyOn(stationWebSocketService, 'waitForMessage').mockResolvedValue(callResultMessage);
 
-      const { request, response } = await stationWebSocketService.sendMessageToCentralSystem(
+      const { request, response } = await stationWebSocketService.prepareAndSendMessageToCentralSystem(
         stationWebSocketClient,
         station,
         operationName,
@@ -258,34 +266,117 @@ describe('StationWebSocketService', () => {
     });
   });
 
+  describe('processCallMsgFromCS', () => {
+    let stationWebSocketClient: StationWebSocketClient;
+    const uniqueId = 'abc';
+    beforeEach(() => {
+      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
+      stationWebSocketService.prepareAndSendMessageToCentralSystem = jest.fn();
+      station.reload = jest.fn().mockResolvedValue(station);
+      station.save = jest.fn().mockResolvedValue(station);
+    });
+
+    test('parseErrorMessage', () => {
+      const requestMessage = 'abc';
+
+      stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+      expect(stationWebSocketClient.send).not.toHaveBeenCalled();
+    });
+
+    describe('RemoteStartTransaction', () => {
+      it('accepts request and sends back StartTransaction with idTag', () => {
+        const idTag = 'TEST_IDTAG';
+        const requestMessage = `[2,"${uniqueId}","RemoteStartTransaction",{"idTag":"TEST_IDTAG","connectorId":1}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(
+          stationWebSocketService.prepareAndSendMessageToCentralSystem,
+        ).toHaveBeenCalledWith(stationWebSocketClient, station, 'StartTransaction', { idTag });
+      });
+    });
+
+    describe('RemoteStopTransaction', () => {
+      it('gets rejected if currentTransactionId does not match', async () => {
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":20}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Rejected"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).not.toHaveBeenCalled();
+      });
+
+      it('gets accepted if currentTransactionId match', async () => {
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":${station.currentTransactionId}}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).toHaveBeenCalledWith(
+          stationWebSocketClient,
+          station,
+          'StopTransaction',
+          {},
+        );
+      });
+    });
+
+    describe('Reset', () => {
+      it('resets station chargeInProgress & currentTransactionId', async () => {
+        station.chargeInProgress = true;
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","Reset",{"type":"Hard"}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(station.save).toHaveBeenCalledTimes(1);
+        expect(station.chargeInProgress).toEqual(false);
+        expect(station.currentTransactionId).toEqual(null);
+        expect(stationWebSocketClient.close).toHaveBeenCalledWith(1012, 'Reset requested by Central System');
+      });
+    });
+  });
+
   describe('processCallResultMsgFromCS', () => {
     let stationWebSocketClient: StationWebSocketClient;
 
     beforeEach(() => {
       stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
     });
+
     describe('Unsupported message Or parse error', () => {
       it('does not do anything if operation is not included', () => {
-        const operationName = 'Heartbeat';
+        stationWebSocketClient.callMessageOperationFromStation = 'Heartbeat';
 
         const response = `[3,"28",{"currentTime":"2020-11-04T10:00:05.627Z"}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
 
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
 
       it('does not do anything if response cannot be parsed', () => {
-        const operationName = 'Heartbeat';
+        stationWebSocketClient.callMessageOperationFromStation = 'Heartbeat';
         const response = `abc`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
 
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
     });
     describe('StartTransaction', () => {
-      const operationName = 'StartTransaction';
+      beforeEach(() => {
+        stationWebSocketClient.callMessageOperationFromStation = 'StartTransaction';
+      });
       afterEach(() => {
         jest.clearAllTimers();
       });
@@ -293,15 +384,17 @@ describe('StationWebSocketService', () => {
       it('does nothing if idTagInfo status is Blocked', () => {
         const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
+        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
       });
 
       it('does nothing if transactionId is < 0', () => {
         const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
+        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
       });
 
       it('update station chargeInProgress & currentTransactionId if status is Accepted and transactionId > 0', async () => {
@@ -313,10 +406,11 @@ describe('StationWebSocketService', () => {
         station.updatedAt = new Date();
         station.reload = jest.fn().mockResolvedValue(station);
         station.save = jest.fn().mockResolvedValue(station);
+        const messageId = stationWebSocketClient.getMessageIdForCall();
         const transactionId = 1;
-        const response = `[3,"9",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
+        const response = `[3,"${messageId}",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
         expect(stationRepository.updateStation).toHaveBeenCalledWith(
           station,
           expect.objectContaining({ chargeInProgress: true, currentTransactionId: transactionId }),
@@ -328,6 +422,7 @@ describe('StationWebSocketService', () => {
         expect(clearInterval).toHaveBeenCalled();
         expect(setInterval).toHaveBeenCalledTimes(1);
         expect(stationWebSocketClient.meterValueInterval).not.toBeNull();
+        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
         jest.advanceTimersByTime(60000);
         await flushPromises();
         expect(station.reload).toHaveBeenCalledTimes(1);
@@ -336,7 +431,7 @@ describe('StationWebSocketService', () => {
         expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
           'MeterValues',
           station,
-          stationWebSocketClient.getLastMessageId(),
+          stationWebSocketClient.lastMessageId,
           { value: station.meterValue },
         );
         expect(stationWebSocketClient.send).toHaveBeenCalledWith(message);
@@ -344,23 +439,35 @@ describe('StationWebSocketService', () => {
     });
 
     describe('StopTransaction', () => {
-      const operationName = 'StopTransaction';
+      beforeEach(() => {
+        jest.useFakeTimers();
+        stationWebSocketClient.callMessageOperationFromStation = 'StopTransaction';
+        stationWebSocketClient.meterValueInterval = setInterval(() => {}, 60000);
+      });
+
+      afterEach(() => {
+        jest.clearAllTimers();
+      });
+
       it('does nothing if idTagInfo status is not Accepted', () => {
         const response = `[3,"15",{"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T09:53:59.031Z"}}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
+        expect(stationWebSocketClient.meterValueInterval).not.toBeNull();
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
 
       it('update station chargeInProgress & currentTransactionId if status is Accepted', () => {
-        const response = `[3,"24",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
+        const messageId = stationWebSocketClient.getMessageIdForCall();
+        const response = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
 
-        stationWebSocketService.processCallResultMsgFromCS(operationName, station, response, stationWebSocketClient);
+        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
 
         expect(stationRepository.updateStation).toHaveBeenCalledWith(
           station,
           expect.objectContaining({ chargeInProgress: false, currentTransactionId: null }),
         );
+        expect(stationWebSocketClient.meterValueInterval).toBeNull();
       });
     });
   });

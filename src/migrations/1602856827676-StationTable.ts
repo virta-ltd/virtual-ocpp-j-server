@@ -37,7 +37,8 @@ export class StationTable1602856827676 implements MigrationInterface {
           },
           {
             name: 'meterValue',
-            type: 'int',
+            type: 'bigint',
+            unsigned: true,
             isNullable: false,
             default: 0,
           },
@@ -55,6 +56,7 @@ export class StationTable1602856827676 implements MigrationInterface {
           {
             name: 'currentChargingPower',
             type: 'int',
+            unsigned: true,
             isNullable: false,
             default: 11000,
           },

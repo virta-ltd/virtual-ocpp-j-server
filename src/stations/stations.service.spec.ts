@@ -232,12 +232,12 @@ describe('StationsService', () => {
       stationService.connectedStationsClients.add(socketForStation1);
 
       stationService.getStationById = jest.fn().mockResolvedValue(station1);
-      stationWebSocketService.sendMessageToCentralSystem = jest
+      stationWebSocketService.prepareAndSendMessageToCentralSystem = jest
         .fn()
         .mockResolvedValue({ request: 'req', response: 'res' });
 
       const { request, response } = await stationService.sendStationOperationRequest(station1.id, 'Heartbeat', {});
-      expect(stationWebSocketService.sendMessageToCentralSystem).toHaveBeenCalledWith(
+      expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).toHaveBeenCalledWith(
         socketForStation1,
         station1,
         'Heartbeat',

@@ -83,7 +83,7 @@ export class StationsService {
       throw new BadRequestException(`Station WS client not found or not connected! ${wsClient?.readyState}`);
     }
 
-    const { request, response } = await this.stationWebSocketService.sendMessageToCentralSystem(
+    const { request, response } = await this.stationWebSocketService.prepareAndSendMessageToCentralSystem(
       wsClient,
       station,
       operationName,

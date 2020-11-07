@@ -20,11 +20,13 @@ describe('StopTransactionRequestBuilder', () => {
   it('test build with data from payload', () => {
     const payload = {
       transactionId: 10,
+      transactionData: 'testTransactionData',
     };
     const request = stopTransactionRequestBuilder.build(station, payload);
 
     expect(request.transactionId).toEqual(payload.transactionId);
     expect(request.timestamp).not.toBeNull();
+    expect(request.transactionData).toEqual(payload.transactionData);
     expect(request.meterStop).toEqual(station.meterValue);
   });
 
