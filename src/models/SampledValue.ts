@@ -2,7 +2,7 @@ export class SampledValue {
   value: string;
   context?: ReadingContext;
   format?: ValueFormat;
-  measureand?: Measurand;
+  measurand?: Measurand;
   phase?: Phase;
   location?: Location;
   unit?: UnitOfMeasure;

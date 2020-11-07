@@ -24,7 +24,7 @@ describe('MeterValuesRequestBuilder', () => {
     expect(meterValue).not.toBeNull();
     expect(meterValue.sampledValue[0].value).toEqual(station.meterValue);
     expect(meterValue.sampledValue[0].context).toEqual(ReadingContext.SamplePeriodic);
-    expect(meterValue.sampledValue[0].measureand).toEqual(Measurand.EnergyActiveImportRegister);
+    expect(meterValue.sampledValue[0].measurand).toEqual(Measurand.EnergyActiveImportRegister);
     expect(meterValue.sampledValue[0].unit).toEqual(UnitOfMeasure.Wh);
     expect(meterValue.sampledValue[0].location).toEqual(Location.Outlet);
     expect(request.connectorId).toBe(1);
@@ -35,7 +35,7 @@ describe('MeterValuesRequestBuilder', () => {
     const payload = {
       value: 200,
       context: ReadingContext.SampleClock,
-      measureand: Measurand.EnergyReactiveExportInterval,
+      measurand: Measurand.EnergyReactiveExportInterval,
       unit: UnitOfMeasure.kWh,
       location: Location.Inlet,
     };
@@ -45,7 +45,7 @@ describe('MeterValuesRequestBuilder', () => {
     expect(meterValue).not.toBeNull();
     expect(meterValue.sampledValue[0].value).toEqual(payload.value);
     expect(meterValue.sampledValue[0].context).toEqual(payload.context);
-    expect(meterValue.sampledValue[0].measureand).toEqual(payload.measureand);
+    expect(meterValue.sampledValue[0].measurand).toEqual(payload.measurand);
     expect(meterValue.sampledValue[0].unit).toEqual(payload.unit);
     expect(meterValue.sampledValue[0].location).toEqual(payload.location);
     expect(request.transactionId).toBe(20);

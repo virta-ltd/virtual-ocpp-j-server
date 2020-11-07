@@ -8,6 +8,7 @@ export class StopTransactionRequestBuilder implements ByChargePointRequestBuilde
     request.transactionId = payload.transactionId ?? station.currentTransactionId;
     request.meterStop = station.meterValue;
     request.timestamp = new Date().toISOString();
+    payload.transactionData ? (request.transactionData = payload.transactionData) : '';
     return request;
   }
 

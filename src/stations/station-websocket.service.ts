@@ -11,6 +11,11 @@ import { StationRepository } from './station.repository';
 import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
 import { StopTransactionResponse } from '../models/StopTransactionResponse';
 import { calculatePowerUsageInWh } from './utils';
+import { RemoteStartTransactionRequest } from '../models/RemoteStartTransactionRequest';
+import { RemoteStopTransactionRequest } from '../models/RemoteStopTransactionRequest';
+import { RemoteStartTransactionResponse } from '../models/RemoteStartTransactionResponse';
+import { RemoteStopTransactionResponse } from '../models/RemoteStopTransactionResponse';
+import { RemoteStartStopStatusEnum } from '../models/RemoteStartStopStatusEnum';
 
 @Injectable()
 export class StationWebSocketService {
@@ -72,7 +77,6 @@ export class StationWebSocketService {
   private createMeterValueInterval(wsClient: StationWebSocketClient, station: Station) {
     // clear any stuck interval
     clearInterval(wsClient.meterValueInterval);
-
     wsClient.meterValueInterval = setInterval(async () => {
       await station.reload();
       station.meterValue =
@@ -90,17 +94,13 @@ export class StationWebSocketService {
   }
 
   public onMessage = (wsClient: StationWebSocketClient, station: Station, data: string) => {
-    this.logger.log('Received message', data);
     let parsedMessage: any;
     parsedMessage = JSON.parse(data);
 
     const messageType = parsedMessage[0] as ChargePointMessageTypes;
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
-        // remoteStart, remoteStop
-        const [, uniqueId, action, payload] = parsedMessage as [number, string, string, object];
-        this.logger.log(parsedMessage);
-        wsClient.callMessageFromCS = parsedMessage;
+        this.processCallMsgFromCS(wsClient, station, data);
         break;
       }
       case ChargePointMessageTypes.CallResult: {
@@ -108,7 +108,7 @@ export class StationWebSocketService {
         break;
       }
       default:
-        this.logger.log('data does not have correct messageTypeId');
+        this.logger.log('data does not have correct messageTypeId', data);
     }
   };
 
@@ -183,6 +183,84 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     });
   };
 
+  public async processCallMsgFromCS(
+    wsClient: StationWebSocketClient,
+    station: Station,
+    request: string,
+  ): Promise<void> {
+    this.logger.log('Processing request from CS', request);
+    try {
+      const parsedMessage = JSON.parse(request);
+      const [, uniqueId, action, payload] = parsedMessage as [number, string, string, object];
+      switch (action.toLowerCase()) {
+        case 'remotestarttransaction': {
+          const { idTag } = payload as RemoteStartTransactionRequest;
+          const responseMessage = this.buildCallResultToCSMessage(
+            station,
+            { status: RemoteStartStopStatusEnum.Accepted },
+            uniqueId,
+            action,
+          );
+          this.sendMessageToCS(wsClient, responseMessage, '');
+          this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StartTransaction', { idTag });
+          break;
+        }
+        case 'remotestoptransaction': {
+          await station.reload();
+          const { transactionId } = payload as RemoteStopTransactionRequest;
+          let status = RemoteStartStopStatusEnum.Accepted;
+          if (station.currentTransactionId !== transactionId) {
+            this.logger.error(
+              `Different transaction_ID received: ${transactionId}. Current transactionId: ${station.currentTransactionId}`,
+            );
+            status = RemoteStartStopStatusEnum.Rejected;
+          }
+          const responseMessage = this.buildCallResultToCSMessage(station, { status }, uniqueId, action);
+          this.sendMessageToCS(wsClient, responseMessage, '');
+
+          if (status === RemoteStartStopStatusEnum.Accepted) {
+            this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StopTransaction', {});
+          }
+          break;
+        }
+        case 'reset': {
+          const responseMessage = this.buildCallResultToCSMessage(station, { status: 'Accepted' }, uniqueId, action);
+          this.sendMessageToCS(wsClient, responseMessage, '');
+          station.chargeInProgress = false;
+          station.currentTransactionId = null;
+          await station.save();
+          wsClient.close(1012, 'Reset requested by Central System');
+          break;
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error processing request from CS`, error.stack ?? '', error.message ?? '');
+    }
+  }
+
+  private buildCallResultToCSMessage(station: Station, payload: any, uniqueId: string, operationName: string): string {
+    let responsePayload: any = {};
+    switch (operationName.toLowerCase()) {
+      case 'remotestarttransaction': {
+        responsePayload = new RemoteStartTransactionResponse();
+        responsePayload.status = payload.status;
+        break;
+      }
+      case 'remotestoptransaction': {
+        responsePayload = new RemoteStopTransactionResponse();
+        responsePayload.status = payload.status;
+        break;
+      }
+      case 'reset': {
+        responsePayload.status = 'Accepted';
+        break;
+      }
+    }
+    const responseMessage = JSON.stringify([ChargePointMessageTypes.CallResult, uniqueId, responsePayload]);
+    this.logger.debug(`Send response message back to CS: ${responseMessage}`);
+    return responseMessage;
+  }
+
   public processCallResultMsgFromCS(wsClient: StationWebSocketClient, station: Station, response: string) {
     try {
       const parsedMessage = JSON.parse(response);
@@ -214,6 +292,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
           if (status === IdTagInfoStatusEnum.Accepted) {
             clearInterval(wsClient.meterValueInterval);
+            wsClient.meterValueInterval = null;
             const dto: CreateOrUpdateStationDto = {
               chargeInProgress: false,
               currentTransactionId: null,

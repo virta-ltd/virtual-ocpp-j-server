@@ -266,6 +266,86 @@ describe('StationWebSocketService', () => {
     });
   });
 
+  describe('processCallMsgFromCS', () => {
+    let stationWebSocketClient: StationWebSocketClient;
+    const uniqueId = 'abc';
+    beforeEach(() => {
+      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
+      stationWebSocketService.prepareAndSendMessageToCentralSystem = jest.fn();
+      station.reload = jest.fn().mockResolvedValue(station);
+      station.save = jest.fn().mockResolvedValue(station);
+    });
+
+    test('parseErrorMessage', () => {
+      const requestMessage = 'abc';
+
+      stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+      expect(stationWebSocketClient.send).not.toHaveBeenCalled();
+    });
+
+    describe('RemoteStartTransaction', () => {
+      it('accepts request and sends back StartTransaction with idTag', () => {
+        const idTag = 'TEST_IDTAG';
+        const requestMessage = `[2,"${uniqueId}","RemoteStartTransaction",{"idTag":"TEST_IDTAG","connectorId":1}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(
+          stationWebSocketService.prepareAndSendMessageToCentralSystem,
+        ).toHaveBeenCalledWith(stationWebSocketClient, station, 'StartTransaction', { idTag });
+      });
+    });
+
+    describe('RemoteStopTransaction', () => {
+      it('gets rejected if currentTransactionId does not match', async () => {
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":20}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Rejected"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).not.toHaveBeenCalled();
+      });
+
+      it('gets accepted if currentTransactionId match', async () => {
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":${station.currentTransactionId}}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).toHaveBeenCalledWith(
+          stationWebSocketClient,
+          station,
+          'StopTransaction',
+          {},
+        );
+      });
+    });
+
+    describe('Reset', () => {
+      it('resets station chargeInProgress & currentTransactionId', async () => {
+        station.chargeInProgress = true;
+        station.currentTransactionId = 10;
+        const requestMessage = `[2,"${uniqueId}","Reset",{"type":"Hard"}]`;
+        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
+
+        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
+
+        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
+        expect(station.save).toHaveBeenCalledTimes(1);
+        expect(station.chargeInProgress).toEqual(false);
+        expect(station.currentTransactionId).toEqual(null);
+        expect(stationWebSocketClient.close).toHaveBeenCalledWith(1012, 'Reset requested by Central System');
+      });
+    });
+  });
+
   describe('processCallResultMsgFromCS', () => {
     let stationWebSocketClient: StationWebSocketClient;
 
@@ -360,13 +440,20 @@ describe('StationWebSocketService', () => {
 
     describe('StopTransaction', () => {
       beforeEach(() => {
+        jest.useFakeTimers();
         stationWebSocketClient.callMessageOperationFromStation = 'StopTransaction';
+        stationWebSocketClient.meterValueInterval = setInterval(() => {}, 60000);
+      });
+
+      afterEach(() => {
+        jest.clearAllTimers();
       });
 
       it('does nothing if idTagInfo status is not Accepted', () => {
         const response = `[3,"15",{"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T09:53:59.031Z"}}]`;
 
         stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
+        expect(stationWebSocketClient.meterValueInterval).not.toBeNull();
         expect(stationRepository.updateStation).not.toHaveBeenCalled();
       });
 
@@ -380,6 +467,7 @@ describe('StationWebSocketService', () => {
           station,
           expect.objectContaining({ chargeInProgress: false, currentTransactionId: null }),
         );
+        expect(stationWebSocketClient.meterValueInterval).toBeNull();
       });
     });
   });
