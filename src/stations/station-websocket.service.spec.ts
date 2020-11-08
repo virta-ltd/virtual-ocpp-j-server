@@ -176,9 +176,11 @@ describe('StationWebSocketService', () => {
       jest.useFakeTimers();
       stationWebSocketClient.connectedTime = new Date();
       stationWebSocketClient.heartbeatInterval = setInterval(() => {}, 1000);
+      stationWebSocketClient.meterValueInterval = setInterval(() => {}, 1000);
       stationWebSocketService.onConnectionClosed(stationWebSocketClient, station, 1005, 'needs to be closed');
 
       expect(clearInterval).toHaveBeenCalledWith(stationWebSocketClient.heartbeatInterval);
+      expect(clearInterval).toHaveBeenCalledWith(stationWebSocketClient.meterValueInterval);
     });
   });
 
