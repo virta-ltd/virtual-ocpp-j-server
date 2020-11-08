@@ -7,7 +7,7 @@ const port = process.env.APP_PORT || 8080;
 
 async function bootstrap() {
   const logger = new Logger('bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { cors: true });
 
   const stationsService = app.get(StationsService);
   await stationsService.connectAllStationsToCentralSystem();

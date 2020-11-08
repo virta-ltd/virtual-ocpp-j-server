@@ -310,6 +310,8 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
               wsClient.getMessageIdForCall(),
               {},
             );
+
+            // TODO: add more status + add a bit delay here
             this.sendMessageToCS(wsClient, availableStatusNotificationMessage, 'StatusNotification');
           }
           break;

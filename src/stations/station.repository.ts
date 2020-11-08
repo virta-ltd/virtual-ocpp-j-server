@@ -7,10 +7,11 @@ import { Station } from './station.entity';
 @EntityRepository(Station)
 export class StationRepository extends Repository<Station> {
   async createStation(createStationDto: CreateOrUpdateStationDto) {
+    const latestStation = await this.getLatestStation();
     const { identity, centralSystemUrl, meterValue, currentChargingPower } = createStationDto;
 
     const station = this.create();
-    station.identity = identity ?? `${process.env.DEFAULT_IDENTITY_NAME}${Math.round(Math.random() * 100000)}`;
+    station.identity = identity ?? `${process.env.DEFAULT_IDENTITY_NAME}${latestStation.id + 1}`;
     station.centralSystemUrl = centralSystemUrl ?? `${process.env.DEFAULT_CENTRAL_SYSTEM_URL}`;
     station.meterValue = meterValue ?? 0;
     station.currentChargingPower = currentChargingPower ?? 11000;
@@ -18,6 +19,11 @@ export class StationRepository extends Repository<Station> {
     await station.save();
 
     return station;
+  }
+
+  async getLatestStation() {
+    const query = this.createQueryBuilder('station');
+    return await query.orderBy('id', 'DESC').getOne();
   }
 
   async updateStation(station: Station, updateStationDto: CreateOrUpdateStationDto) {
