@@ -1,4 +1,3 @@
-import { BootNotifcationRequest } from 'src/models/BootNotificationRequest';
 import { ByChargePointRequestTypes } from 'src/models/ByChargePointRequestTypes';
 import { Station } from 'src/stations/station.entity';
 

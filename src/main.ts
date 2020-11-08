@@ -11,8 +11,8 @@ async function bootstrap() {
 
   const stationsService = app.get(StationsService);
   await stationsService.connectAllStationsToCentralSystem();
-  setInterval(async () => {
-    await stationsService.connectAllStationsToCentralSystem();
+  setInterval(() => {
+    stationsService.connectAllStationsToCentralSystem();
   }, 30000);
 
   await app.listen(port);

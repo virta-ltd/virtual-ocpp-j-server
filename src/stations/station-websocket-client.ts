@@ -6,10 +6,8 @@ export class StationWebSocketClient extends WebSocket {
   public connectedTime: Date = null;
   public heartbeatInterval: NodeJS.Timeout = null;
   public meterValueInterval: NodeJS.Timeout = null;
-  private _callMessageFromCS?: string = null;
   public callResultMessageFromCS?: string = null;
   public expectingCallResult: boolean = false;
-
   private _callMessageOperationFromStation: string = '';
 
   public get callMessageOperationFromStation() {

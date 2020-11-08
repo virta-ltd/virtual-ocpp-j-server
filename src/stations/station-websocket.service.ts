@@ -55,6 +55,16 @@ export class StationWebSocketService {
     );
     this.sendMessageToCS(wsClient, bootMessage, 'BootNotification');
 
+    this.createHeartbeatInterval(wsClient, station);
+
+    if (station.chargeInProgress) {
+      this.createMeterValueInterval(wsClient, station);
+    }
+
+    // TODO: ping the server if heartbeat is more than 5 mins
+  };
+
+  private createHeartbeatInterval(wsClient: StationWebSocketClient, station: Station) {
     wsClient.heartbeatInterval = setInterval(() => {
       // do not send heartbeat if meterValue is being sent
       if (wsClient.meterValueInterval) return;
@@ -66,13 +76,7 @@ export class StationWebSocketService {
       );
       this.sendMessageToCS(wsClient, heartbeatMessage, 'Heartbeat');
     }, 60000);
-
-    if (station.chargeInProgress) {
-      this.createMeterValueInterval(wsClient, station);
-    }
-
-    // TODO: ping the server if heartbeat is more than 5 mins
-  };
+  }
 
   private createMeterValueInterval(wsClient: StationWebSocketClient, station: Station) {
     // clear any stuck interval
@@ -118,6 +122,7 @@ export class StationWebSocketService {
 
   public onConnectionClosed = (wsClient: StationWebSocketClient, station: Station, code: number, reason: string) => {
     clearInterval(wsClient.heartbeatInterval);
+    clearInterval(wsClient.meterValueInterval);
 
     if (wsClient?.connectedTime) {
       const connectedDurationInSeconds = (new Date().getTime() - wsClient.connectedTime.getTime()) / 1000;
