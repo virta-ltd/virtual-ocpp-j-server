@@ -5,7 +5,6 @@ import { ByChargePointRequestBuilderFactory } from './by-charge-point-request-bu
 
 @Injectable()
 export class ByChargePointOperationMessageGenerator {
-  private logger = new Logger(ByChargePointOperationMessageGenerator.name);
   constructor(private readonly byChargePointRequestBuilderFactory: ByChargePointRequestBuilderFactory) {}
 
   public createMessage(operationName: string, station: Station, uniqueId: number, payload?: any): string {
@@ -23,8 +22,6 @@ export class ByChargePointOperationMessageGenerator {
       builder.getOperationName(),
       chargePointRequest,
     ]);
-
-    this.logger.debug(`Created Message: ${message}`);
 
     return message;
   }
