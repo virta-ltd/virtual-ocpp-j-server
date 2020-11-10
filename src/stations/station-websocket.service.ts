@@ -24,7 +24,7 @@ export class StationWebSocketService {
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
-  ) {}
+  ) { }
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
     let wsClient: StationWebSocketClient;
@@ -163,6 +163,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
 
   private sendMessageToCS(wsClient: StationWebSocketClient, message: string, operationName: string) {
     wsClient.callMessageOperationFromStation = operationName;
+    this.logger.verbose(`Sending message for station ${wsClient.stationIdentity}: ${message}`);
     wsClient.send(message);
   }
 
@@ -271,7 +272,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
       const parsedMessage = JSON.parse(response);
       const [, reqId, payload] = parsedMessage as [number, string, object];
       if (reqId.toString() !== wsClient.lastMessageId.toString()) return;
-      this.logger.log(`Received response for reqId ${wsClient.lastMessageId}: ${response}`);
+      this.logger.verbose(`Received response for reqId ${wsClient.lastMessageId}: ${response}`);
 
       switch (wsClient.callMessageOperationFromStation.toLowerCase()) {
         case 'starttransaction': {

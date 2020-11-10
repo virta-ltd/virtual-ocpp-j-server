@@ -25,18 +25,32 @@ describe('StationRepository', () => {
       saveFn = jest.fn();
       stationRepository.create = jest.fn().mockReturnValue({ save: saveFn });
       saveFn.mockResolvedValue(undefined);
+    });
 
+    it('creates station successfully without data', async () => {
       latestStation = new Station();
       latestStation.id = 3;
       jest.spyOn(stationRepository, 'getLatestStation').mockResolvedValue(latestStation);
-    });
-    it('creates station successfully without data', async () => {
+
       const dto = {};
 
       const station = await stationRepository.createStation(dto);
 
       expect(saveFn).toHaveBeenCalled();
       expect(station.identity).toEqual(`${process.env.DEFAULT_IDENTITY_NAME}${latestStation.id + 1}`);
+      expect(station.centralSystemUrl).toEqual(process.env.DEFAULT_CENTRAL_SYSTEM_URL);
+      expect(station.meterValue).toEqual(0);
+      expect(station.currentChargingPower).toEqual(11000);
+    });
+
+    it('creates station successfully without data & no latest station is found', async () => {
+      jest.spyOn(stationRepository, 'getLatestStation').mockResolvedValue(null);
+      const dto = {};
+
+      const station = await stationRepository.createStation(dto);
+
+      expect(saveFn).toHaveBeenCalled();
+      expect(station.identity).toEqual(`${process.env.DEFAULT_IDENTITY_NAME}1`);
       expect(station.centralSystemUrl).toEqual(process.env.DEFAULT_CENTRAL_SYSTEM_URL);
       expect(station.meterValue).toEqual(0);
       expect(station.currentChargingPower).toEqual(11000);
