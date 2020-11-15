@@ -2,20 +2,9 @@ sudo: required
 services:
   - docker
 
-env:
-  global:
-    - SHA=$(git rev-parse HEAD)
-    - CLOUDSDK_CORE_DISABLE_PROMPTS=1
-
 before_install:
   - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
   - docker build -t qhieu45/virtual-ocpp-j-server-test -f .
 
 script:
   - docker run -e CI=true qhieu45/virtual-ocpp-j-server-test npm test
-
-after_success:
-  - docker build -t qhieu45/virtual-ocpp-j-server:latest
-  - docker build -t qhieu45/virtual-ocpp-j-server:$SHA
-  - docker push qhieu45/virtual-ocpp-j-server:latest
-  - docker push qhieu45/virtual-ocpp-j-server:$SHA
