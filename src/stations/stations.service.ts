@@ -17,7 +17,7 @@ export class StationsService {
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
     private stationWebSocketService: StationWebSocketService,
-  ) {}
+  ) { }
 
   async getStations(filterDto: GetStationsFilterDto): Promise<Station[]> {
     return this.stationRepository.getStations(filterDto);
@@ -47,10 +47,12 @@ export class StationsService {
     return this.stationRepository.updateStation(station, updateStationDto);
   }
 
-connectStationToCentralSystem(station: Station) {
-  const newStationWebSocketClient = this.stationWebSocketService.createStationWebSocket(station);
-  this.connectedStationsClients.add(newStationWebSocketClient);
-}
+  connectStationToCentralSystem(station: Station) {
+    const newStationWebSocketClient = this.stationWebSocketService.createStationWebSocket(station);
+    if (newStationWebSocketClient) {
+      this.connectedStationsClients.add(newStationWebSocketClient);
+    }
+  }
 
   async connectAllStationsToCentralSystem() {
     let dbStations: Station[] = [];
