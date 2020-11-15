@@ -5,6 +5,7 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+      target: base
     image: ocppj-virtual-server
     container_name: ocppj-virtual-server
     restart: unless-stopped
@@ -20,7 +21,7 @@ services:
       - 8080:8080
       - 9229:9229
     volumes: 
-      - ./src:/app/src
+      - ./:/app
       - node_modules:/app/node_modules
     networks: 
       - ocppj-virtual-network

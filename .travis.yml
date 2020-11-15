@@ -1,0 +1,10 @@
+sudo: required
+services:
+  - docker
+
+before_install:
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  - docker build -t qhieu45/virtual-ocpp-j-server-test .
+
+script:
+  - docker run -e CI=true qhieu45/virtual-ocpp-j-server-test npm test
