@@ -1,14 +1,9 @@
-FROM node:12.19-alpine
-
+FROM node:14.15.0-alpine3.10 as base
 WORKDIR /app
-
+COPY package*.json ./
+RUN npm install
 COPY . .
 
-RUN npm install
-
-# Compile
+FROM base as build
 RUN npm run build
-
-EXPOSE 8080
-
-# CMD [ "npm", "run", "start:prod" ]
+CMD ["node", "dist/main.js"]
