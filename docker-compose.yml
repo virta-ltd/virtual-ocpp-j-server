@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 
 services:
   ocppj-virtual-server:
@@ -20,13 +20,13 @@ services:
     ports:
       - 8080:8080
       - 9229:9229
-    volumes: 
+    volumes:
       - ./:/app
       - node_modules:/app/node_modules
-    networks: 
+    networks:
       - ocppj-virtual-network
     command: './wait-for.sh db:3306 -- npm run start:debug-migrate'
-  
+
   db:
     image: mysql:8.0.22
     container_name: db
