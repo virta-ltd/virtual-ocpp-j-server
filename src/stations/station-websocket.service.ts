@@ -24,7 +24,7 @@ export class StationWebSocketService {
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
-  ) { }
+  ) {}
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
     let wsClient: StationWebSocketClient;
@@ -133,12 +133,22 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     }
   };
 
+  private async updateStationMeterValue(station: Station, operationName: string) {
+    if (operationName === 'StopTransaction') {
+      const dto = new CreateOrUpdateStationDto();
+      dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+      this.stationRepository.updateStation(station, dto);
+    }
+  }
+
   public async prepareAndSendMessageToCentralSystem(
     wsClient: StationWebSocketClient,
     station: Station,
     operationName: string,
     payload: StationOperationDto,
   ) {
+    await this.updateStationMeterValue(station, operationName);
+
     const message = this.byChargePointOperationMessageGenerator.createMessage(
       operationName,
       station,
