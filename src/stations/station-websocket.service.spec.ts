@@ -190,6 +190,7 @@ describe('StationWebSocketService', () => {
     beforeEach(() => {
       stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
     });
+
     it('throws exception if operationName is not correct', async () => {
       const operationName = 'abc';
       mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('');
@@ -201,6 +202,22 @@ describe('StationWebSocketService', () => {
           {},
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('updates station meter value if operationName is StopTransaction', async () => {
+      const operationName = 'StopTransaction';
+      mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('some message');
+      jest.spyOn(stationWebSocketService, 'waitForMessage').mockResolvedValue('abcdef');
+      station.updatedAt = new Date();
+      await stationWebSocketService.prepareAndSendMessageToCentralSystem(
+        stationWebSocketClient,
+        station,
+        operationName,
+        {},
+      );
+      expect(stationRepository.updateStation).toHaveBeenCalledWith(station, {
+        meterValue: expect.any(Number),
+      });
     });
 
     it('sends message to CentralSystem based on params', async () => {
