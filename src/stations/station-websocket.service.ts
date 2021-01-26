@@ -11,11 +11,10 @@ import { StationRepository } from './station.repository';
 import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
 import { StopTransactionResponse } from '../models/StopTransactionResponse';
 import { calculatePowerUsageInWh } from './utils';
-import { RemoteStartTransactionRequest } from '../models/RemoteStartTransactionRequest';
-import { RemoteStopTransactionRequest } from '../models/RemoteStopTransactionRequest';
 import { RemoteStartTransactionResponse } from '../models/RemoteStartTransactionResponse';
 import { RemoteStopTransactionResponse } from '../models/RemoteStopTransactionResponse';
-import { RemoteStartStopStatusEnum } from '../models/RemoteStartStopStatusEnum';
+import { CallMsgHandlerFactory } from './handler/call-msg-handler-factory';
+import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
 
 @Injectable()
 export class StationWebSocketService {
@@ -24,6 +23,7 @@ export class StationWebSocketService {
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
+    private callMsgHandlerFactory: CallMsgHandlerFactory,
   ) {}
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
@@ -102,9 +102,11 @@ export class StationWebSocketService {
     parsedMessage = JSON.parse(data);
 
     const messageType = parsedMessage[0] as ChargePointMessageTypes;
+    const operationName = parsedMessage[2] as OperationNameFromCentralSystem;
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
-        this.processCallMsgFromCS(wsClient, station, data);
+        const msgHandler = this.callMsgHandlerFactory.getHandler(operationName);
+        msgHandler.handle(wsClient, station, data);
         break;
       }
       case ChargePointMessageTypes.CallResult: {
@@ -128,8 +130,9 @@ export class StationWebSocketService {
       const connectedDurationInSeconds = (new Date().getTime() - wsClient.connectedTime.getTime()) / 1000;
       const connectedMinutes = Math.floor(connectedDurationInSeconds / 60);
       const extraConnectedSeconds = connectedDurationInSeconds % 60;
-      this.logger.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
-Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
+      this.logger.log(
+        `Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds. Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`,
+      );
     }
   };
 
@@ -209,36 +212,6 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
       const parsedMessage = JSON.parse(request);
       const [, uniqueId, action, payload] = parsedMessage as [number, string, string, object];
       switch (action.toLowerCase()) {
-        case 'remotestarttransaction': {
-          const { idTag } = payload as RemoteStartTransactionRequest;
-          const responseMessage = this.buildCallResultToCSMessage(
-            station,
-            { status: RemoteStartStopStatusEnum.Accepted },
-            uniqueId,
-            action,
-          );
-          this.sendMessageToCS(wsClient, responseMessage, '');
-          this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StartTransaction', { idTag });
-          break;
-        }
-        case 'remotestoptransaction': {
-          await station.reload();
-          const { transactionId } = payload as RemoteStopTransactionRequest;
-          let status = RemoteStartStopStatusEnum.Accepted;
-          if (station.currentTransactionId !== transactionId) {
-            this.logger.error(
-              `Different transaction_ID received: ${transactionId}. Current transactionId: ${station.currentTransactionId}`,
-            );
-            status = RemoteStartStopStatusEnum.Rejected;
-          }
-          const responseMessage = this.buildCallResultToCSMessage(station, { status }, uniqueId, action);
-          this.sendMessageToCS(wsClient, responseMessage, '');
-
-          if (status === RemoteStartStopStatusEnum.Accepted) {
-            this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StopTransaction', {});
-          }
-          break;
-        }
         case 'reset': {
           const responseMessage = this.buildCallResultToCSMessage(station, { status: 'Accepted' }, uniqueId, action);
           this.sendMessageToCS(wsClient, responseMessage, '');
@@ -281,7 +254,14 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     try {
       const parsedMessage = JSON.parse(response);
       const [, reqId, payload] = parsedMessage as [number, string, object];
-      if (reqId.toString() !== wsClient.lastMessageId.toString()) return;
+
+      if (reqId.toString() !== wsClient.lastMessageId.toString()) {
+        this.logger.error(
+          `Received incorrect reqId. wsClient.lastMessageId: ${wsClient.lastMessageId}. Received message: ${response}`,
+        );
+        return;
+      }
+
       this.logger.verbose(`Received response for reqId ${wsClient.lastMessageId}: ${response}`);
 
       switch (wsClient.callMessageOperationFromStation.toLowerCase()) {

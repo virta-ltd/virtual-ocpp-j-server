@@ -1,13 +1,19 @@
 import { Station } from 'src/stations/station.entity';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ChargePointMessageTypes } from '../../models/ChargePointMessageTypes';
 import { ByChargePointRequestBuilderFactory } from './by-charge-point-request-builder-factory';
+import { ByChargePointOperationNameEnum } from './by-charge-point-operation-name-enum';
 
 @Injectable()
 export class ByChargePointOperationMessageGenerator {
   constructor(private readonly byChargePointRequestBuilderFactory: ByChargePointRequestBuilderFactory) {}
 
-  public createMessage(operationName: string, station: Station, uniqueId: number, payload?: any): string {
+  public createMessage(
+    operationName: string | ByChargePointOperationNameEnum,
+    station: Station,
+    uniqueId: number,
+    payload?: any,
+  ): string {
     const builder = this.byChargePointRequestBuilderFactory.getBuilderFromOperationName(operationName);
 
     if (builder === null) {
