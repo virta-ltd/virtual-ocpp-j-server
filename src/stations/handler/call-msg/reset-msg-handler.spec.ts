@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { StationWebSocketClient } from '../station-websocket-client';
-import { Station } from '../station.entity';
+import { StationWebSocketClient } from '../../station-websocket-client';
+import { Station } from '../../station.entity';
 import { ResetMsgHandler } from './reset-msg-handler';
 jest.mock('ws');
 

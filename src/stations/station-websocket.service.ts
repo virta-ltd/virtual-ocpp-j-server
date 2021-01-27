@@ -11,9 +11,7 @@ import { StationRepository } from './station.repository';
 import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
 import { StopTransactionResponse } from '../models/StopTransactionResponse';
 import { calculatePowerUsageInWh } from './utils';
-import { RemoteStartTransactionResponse } from '../models/RemoteStartTransactionResponse';
-import { RemoteStopTransactionResponse } from '../models/RemoteStopTransactionResponse';
-import { CallMsgHandlerFactory } from './handler/call-msg-handler-factory';
+import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
 import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
 
 @Injectable()

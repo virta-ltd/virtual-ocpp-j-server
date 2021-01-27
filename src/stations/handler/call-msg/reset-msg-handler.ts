@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ChargePointMessageTypes } from '../../models/ChargePointMessageTypes';
-import { ResetRequest } from '../../models/ResetRequest';
-import { ResetResponse } from '../../models/ResetResponse';
-import { ResetStatusEnum } from '../../models/ResetStatusEnum';
-import { StationWebSocketClient } from '../station-websocket-client';
-import { Station } from '../station.entity';
+import { ChargePointMessageTypes } from '../../../models/ChargePointMessageTypes';
+import { ResetRequest } from '../../../models/ResetRequest';
+import { ResetResponse } from '../../../models/ResetResponse';
+import { ResetStatusEnum } from '../../../models/ResetStatusEnum';
+import { StationWebSocketClient } from '../../station-websocket-client';
+import { Station } from '../../station.entity';
 import { CallMsgHandlerInterface } from './call-msg-handler-interface';
 
 @Injectable()

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ByChargePointOperationMessageGenerator } from '../../message/by-charge-point/by-charge-point-operation-message-generator';
-import { StationWebSocketClient } from '../station-websocket-client';
-import { Station } from '../station.entity';
+import { ByChargePointOperationMessageGenerator } from '../../../message/by-charge-point/by-charge-point-operation-message-generator';
+import { StationWebSocketClient } from '../../station-websocket-client';
+import { Station } from '../../station.entity';
 import { RemoteStopTransactionMsgHandler } from './remote-stop-transaction-msg-handler';
 jest.mock('ws');
 

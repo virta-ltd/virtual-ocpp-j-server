@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OperationNameFromCentralSystem } from '../../models/OperationNameFromCentralSystem';
+import { OperationNameFromCentralSystem } from '../../../models/OperationNameFromCentralSystem';
 import { CallMsgHandlerInterface } from './call-msg-handler-interface';
 import { RemoteStartTransactionMsgHandler } from './remote-start-transaction-msg-handler';
 import { RemoteStopTransactionMsgHandler } from './remote-stop-transaction-msg-handler';

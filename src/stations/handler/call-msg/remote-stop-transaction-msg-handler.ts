@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RemoteStopTransactionRequest } from '../../models/RemoteStopTransactionRequest';
-import { RemoteStopTransactionResponse } from '../../models/RemoteStopTransactionResponse';
-import { ByChargePointOperationMessageGenerator } from '../../message/by-charge-point/by-charge-point-operation-message-generator';
-import { ByChargePointOperationNameEnum } from '../../message/by-charge-point/by-charge-point-operation-name-enum';
-import { ChargePointMessageTypes } from '../../models/ChargePointMessageTypes';
-import { RemoteStartStopStatusEnum } from '../../models/RemoteStartStopStatusEnum';
-import { StationWebSocketClient } from '../station-websocket-client';
-import { Station } from '../station.entity';
+import { RemoteStopTransactionRequest } from '../../../models/RemoteStopTransactionRequest';
+import { RemoteStopTransactionResponse } from '../../../models/RemoteStopTransactionResponse';
+import { ByChargePointOperationMessageGenerator } from '../../../message/by-charge-point/by-charge-point-operation-message-generator';
+import { ByChargePointOperationNameEnum } from '../../../message/by-charge-point/by-charge-point-operation-name-enum';
+import { ChargePointMessageTypes } from '../../../models/ChargePointMessageTypes';
+import { RemoteStartStopStatusEnum } from '../../../models/RemoteStartStopStatusEnum';
+import { StationWebSocketClient } from '../../station-websocket-client';
+import { Station } from '../../station.entity';
 import { CallMsgHandlerInterface } from './call-msg-handler-interface';
 
 @Injectable()
