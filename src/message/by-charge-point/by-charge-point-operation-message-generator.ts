@@ -2,14 +2,14 @@ import { Station } from 'src/stations/station.entity';
 import { Injectable } from '@nestjs/common';
 import { ChargePointMessageTypes } from '../../models/ChargePointMessageTypes';
 import { ByChargePointRequestBuilderFactory } from './by-charge-point-request-builder-factory';
-import { ByChargePointOperationNameEnum } from './by-charge-point-operation-name-enum';
+import { OperationNameFromChargePoint } from '../../models/OperationNameFromChargePoint';
 
 @Injectable()
 export class ByChargePointOperationMessageGenerator {
   constructor(private readonly byChargePointRequestBuilderFactory: ByChargePointRequestBuilderFactory) {}
 
   public createMessage(
-    operationName: string | ByChargePointOperationNameEnum,
+    operationName: string | OperationNameFromChargePoint,
     station: Station,
     uniqueId: number,
     payload?: any,

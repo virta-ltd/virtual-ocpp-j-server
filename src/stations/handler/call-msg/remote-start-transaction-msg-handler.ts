@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OperationNameFromChargePoint } from '../../../models/OperationNameFromChargePoint';
 import { ByChargePointOperationMessageGenerator } from '../../../message/by-charge-point/by-charge-point-operation-message-generator';
-import { ByChargePointOperationNameEnum } from '../../../message/by-charge-point/by-charge-point-operation-name-enum';
 import { ChargePointMessageTypes } from '../../../models/ChargePointMessageTypes';
 import { RemoteStartStopStatusEnum } from '../../../models/RemoteStartStopStatusEnum';
 import { RemoteStartTransactionRequest } from '../../../models/RemoteStartTransactionRequest';
@@ -28,14 +28,14 @@ export class RemoteStartTransactionMsgHandler implements CallMsgHandlerInterface
 
     // create new flow, send StartTransaction to station
     const startTransactionMsg = this.byChargePointOperationMessageGenerator.createMessage(
-      ByChargePointOperationNameEnum.StartTransaction,
+      OperationNameFromChargePoint.StartTransaction,
       station,
       wsClient.getMessageIdForCall(),
       { idTag },
     );
 
     this.logger.verbose(`Sending message for station ${wsClient.stationIdentity}: ${startTransactionMsg}`);
-    wsClient.sendCallMsgForOperation(startTransactionMsg, ByChargePointOperationNameEnum.StartTransaction);
+    wsClient.sendCallMsgForOperation(startTransactionMsg, OperationNameFromChargePoint.StartTransaction);
   }
 
   private buildResponseMsg(): RemoteStartTransactionResponse {
