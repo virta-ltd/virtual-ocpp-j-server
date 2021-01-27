@@ -7,18 +7,18 @@ jest.mock('ws');
 
 describe('RemoteStopTransactionMsgHandler', () => {
   let station: Station;
-  let byChargePointOperationMessageGenerator;
-  let mockByChargePointOperationMessageGenerator = () => ({
+  let remoteStopTransactionMsgHandler: RemoteStopTransactionMsgHandler;
+  let byChargePointOperationMessageGeneratorFactory = () => ({
     createMessage: jest.fn(),
   });
-  let remoteStopTransactionMsgHandler: RemoteStopTransactionMsgHandler;
+  let byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
           provide: ByChargePointOperationMessageGenerator,
-          useFactory: mockByChargePointOperationMessageGenerator,
+          useFactory: byChargePointOperationMessageGeneratorFactory,
         },
         RemoteStopTransactionMsgHandler,
       ],
@@ -34,11 +34,10 @@ describe('RemoteStopTransactionMsgHandler', () => {
       station = new Station();
       station.identity = 'test_station';
       station.centralSystemUrl = 'ws://localhost:1234';
+      station.currentTransactionId = 1234;
     });
 
     it('reloads station, build response case Accepted, send response & send StopTransaction msg', async () => {
-      const transactionId = 1234;
-      station.currentTransactionId = transactionId;
       station.reload = jest.fn().mockResolvedValueOnce(station);
 
       const messageIdForCall = 10;
@@ -48,12 +47,12 @@ describe('RemoteStopTransactionMsgHandler', () => {
 
       const stopTransactionMsg =
         '[2,"2","StopTransaction",{"transactionId":354348,"meterStop":195575,"timestamp":"2021-01-26T12:39:18.753Z"}]';
-      byChargePointOperationMessageGenerator.createMessage.mockReturnValue(stopTransactionMsg);
+      (byChargePointOperationMessageGenerator.createMessage as jest.Mock).mockReturnValue(stopTransactionMsg);
 
       await remoteStopTransactionMsgHandler.handle(
         wsClient,
         station,
-        `[2,"c1f62f7f-bfab-44b4-b42c-28ca200606aa","RemoteStopTransaction",{"transactionId":${transactionId}}]`,
+        `[2,"c1f62f7f-bfab-44b4-b42c-28ca200606aa","RemoteStopTransaction",{"transactionId":${station.currentTransactionId}}]`,
       );
 
       expect(wsClient.send).toHaveBeenNthCalledWith(
@@ -70,9 +69,7 @@ describe('RemoteStopTransactionMsgHandler', () => {
 
     it('build response case Rejected, send rejected response & not send StopTransaction msg', async () => {
       station.reload = jest.fn();
-      const transactionId = 1234;
       const wrongTransactionId = 11;
-      station.currentTransactionId = transactionId;
 
       const wsClient = new StationWebSocketClient(station.centralSystemUrl);
       wsClient.sendCallMsgForOperation = jest.fn();

@@ -19,7 +19,8 @@ export class RemoteStartTransactionMsgHandler implements CallMsgHandlerInterface
     const parsedMessage = JSON.parse(requestFromCS);
     const [, uniqueId, , payload] = parsedMessage as [number, string, string, object];
     const { idTag } = payload as RemoteStartTransactionRequest;
-    const responseMessage = this.buildResponseMsg(uniqueId);
+    const remoteStartResponse = this.buildResponseMsg();
+    const responseMessage = JSON.stringify([ChargePointMessageTypes.CallResult, uniqueId, remoteStartResponse]);
 
     // send response back to station
     this.logger.verbose(`Sending response for station ${wsClient.stationIdentity}: ${responseMessage}`);
@@ -37,10 +38,10 @@ export class RemoteStartTransactionMsgHandler implements CallMsgHandlerInterface
     wsClient.sendCallMsgForOperation(startTransactionMsg, ByChargePointOperationNameEnum.StartTransaction);
   }
 
-  private buildResponseMsg(uniqueId: string): string {
-    const payload = new RemoteStartTransactionResponse();
-    payload.status = RemoteStartStopStatusEnum.Accepted; // later should check to reject if charger is in use?
+  private buildResponseMsg(): RemoteStartTransactionResponse {
+    const response = new RemoteStartTransactionResponse();
+    response.status = RemoteStartStopStatusEnum.Accepted; // later should check to reject if charger is in use?
 
-    return JSON.stringify([ChargePointMessageTypes.CallResult, uniqueId, payload]);
+    return response;
   }
 }

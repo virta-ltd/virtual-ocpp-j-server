@@ -1,29 +1,31 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { OperationNameFromCentralSystem } from '../../models/OperationNameFromCentralSystem';
 import { CallMsgHandlerInterface } from './call-msg-handler-interface';
 import { RemoteStartTransactionMsgHandler } from './remote-start-transaction-msg-handler';
 import { RemoteStopTransactionMsgHandler } from './remote-stop-transaction-msg-handler';
+import { ResetMsgHandler } from './reset-msg-handler';
 
 @Injectable()
 export class CallMsgHandlerFactory {
-  private logger = new Logger(CallMsgHandlerFactory.name);
   public constructor(
     private remoteStartTransactionMsgHandler: RemoteStartTransactionMsgHandler,
-    private remoteStopTransactionHandler: RemoteStopTransactionMsgHandler,
+    private remoteStopTransactionMsgHandler: RemoteStopTransactionMsgHandler,
+    private resetMsgHandler: ResetMsgHandler,
   ) {}
 
-  getHandler(operationName: OperationNameFromCentralSystem): CallMsgHandlerInterface {
-    this.logger.log('Operation name: ' + operationName);
+  getHandler(operationName: OperationNameFromCentralSystem): CallMsgHandlerInterface | null {
     switch (operationName) {
       case OperationNameFromCentralSystem.RemoteStartTransaction: {
         return this.remoteStartTransactionMsgHandler;
       }
       case OperationNameFromCentralSystem.RemoteStopTransaction: {
-        return this.remoteStopTransactionHandler;
+        return this.remoteStopTransactionMsgHandler;
       }
-      case OperationNameFromCentralSystem.Reset:
-        break;
+      case OperationNameFromCentralSystem.Reset: {
+        return this.resetMsgHandler;
+      }
       default:
+        return null;
     }
   }
 }

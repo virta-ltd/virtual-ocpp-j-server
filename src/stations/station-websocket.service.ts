@@ -106,7 +106,7 @@ export class StationWebSocketService {
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
         const msgHandler = this.callMsgHandlerFactory.getHandler(operationName);
-        msgHandler.handle(wsClient, station, data);
+        msgHandler?.handle(wsClient, station, data);
         break;
       }
       case ChargePointMessageTypes.CallResult: {
