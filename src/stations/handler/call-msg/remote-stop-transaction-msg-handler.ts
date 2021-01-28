@@ -15,6 +15,10 @@ export class RemoteStopTransactionMsgHandler implements CallMsgHandlerInterface 
   public constructor(private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator) {}
 
   public async handle(wsClient: StationWebSocketClient, station: Station, requestFromCS: string): Promise<void> {
+    // const dto = new CreateOrUpdateStationDto();
+    // dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+    // this.stationRepository.updateStation(station, dto);
+
     // parse message & build response
     await station.reload();
     const parsedMessage = JSON.parse(requestFromCS);

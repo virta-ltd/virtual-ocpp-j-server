@@ -23,7 +23,7 @@ export class RemoteStartTransactionMsgHandler implements CallMsgHandlerInterface
     const responseMessage = JSON.stringify([ChargePointMessageTypes.CallResult, uniqueId, remoteStartResponse]);
 
     // send response back to station
-    this.logger.verbose(`Sending response for station ${wsClient.stationIdentity}: ${responseMessage}`);
+    this.logger.log(`Sending response for remote start (identity: ${wsClient.stationIdentity}): ${responseMessage}`);
     wsClient.send(responseMessage);
 
     // create new flow, send StartTransaction to station
@@ -34,7 +34,7 @@ export class RemoteStartTransactionMsgHandler implements CallMsgHandlerInterface
       { idTag },
     );
 
-    this.logger.verbose(`Sending message for station ${wsClient.stationIdentity}: ${startTransactionMsg}`);
+    this.logger.log(`Sending message for station ${wsClient.stationIdentity}: ${startTransactionMsg}`);
     wsClient.sendCallMsgForOperation(startTransactionMsg, OperationNameFromChargePoint.StartTransaction);
   }
 

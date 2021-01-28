@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { StartTransactionResponse } from '../models/StartTransactionResponse';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
 import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
@@ -8,11 +7,10 @@ import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
-import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
-import { StopTransactionResponse } from '../models/StopTransactionResponse';
 import { calculatePowerUsageInWh } from './utils';
 import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
 import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
+import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-factory';
 
 @Injectable()
 export class StationWebSocketService {
@@ -22,6 +20,7 @@ export class StationWebSocketService {
     private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
     private callMsgHandlerFactory: CallMsgHandlerFactory,
+    private callResultMsgHandlerFactory: CallResultMsgHandlerFactory,
   ) {}
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
@@ -98,17 +97,38 @@ export class StationWebSocketService {
   public onMessage = (wsClient: StationWebSocketClient, station: Station, data: string) => {
     let parsedMessage: any;
     parsedMessage = JSON.parse(data);
-
     const messageType = parsedMessage[0] as ChargePointMessageTypes;
-    const operationName = parsedMessage[2] as OperationNameFromCentralSystem;
+
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
+        const operationName = parsedMessage[2] as OperationNameFromCentralSystem;
         const msgHandler = this.callMsgHandlerFactory.getHandler(operationName);
         msgHandler?.handle(wsClient, station, data);
         break;
       }
+
       case ChargePointMessageTypes.CallResult: {
-        this.processCallResultMsgFromCS(wsClient, station, data);
+        const [, reqId] = parsedMessage as [number, string, object];
+
+        this.logger.log(
+          `Received CallResult message (identity: ${station.identity}) for operation ${wsClient.callMessageOperationFromStation}: ${data}`,
+        );
+
+        if (!wsClient.isLastMessageIdSimilar(reqId)) {
+          this.logger.error(
+            `Received incorrect reqId. wsClient.lastMessageId: ${wsClient.lastMessageId}. Received message: ${data}`,
+            null,
+            `Identity ${station.identity}`,
+          );
+          return;
+        }
+
+        const msgHandler = this.callResultMsgHandlerFactory.getHandler(wsClient.callMessageOperationFromStation);
+        msgHandler?.handle(wsClient, station, parsedMessage);
+
+        wsClient.callResultMessageFromCS = wsClient.expectingCallResult ? data : null;
+        wsClient.callMessageOperationFromStation = '';
+
         break;
       }
       default:

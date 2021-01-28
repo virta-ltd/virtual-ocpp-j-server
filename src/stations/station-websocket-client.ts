@@ -26,4 +26,8 @@ export class StationWebSocketClient extends WebSocket {
     this.send(msg);
     this.callMessageOperationFromStation = operationName;
   }
+
+  public isLastMessageIdSimilar(reqId: string) {
+    return this._lastMessageId.toString() === reqId;
+  }
 }
