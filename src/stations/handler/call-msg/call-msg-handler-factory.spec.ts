@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ByChargePointOperationMessageGenerator } from '../../../message/by-charge-point/by-charge-point-operation-message-generator';
 import { OperationNameFromCentralSystem } from '../../../models/OperationNameFromCentralSystem';
+import { StationRepository } from '../../station.repository';
 import { CallMsgHandlerFactory } from './call-msg-handler-factory';
 import { RemoteStartTransactionMsgHandler } from './remote-start-transaction-msg-handler';
 import { RemoteStopTransactionMsgHandler } from './remote-stop-transaction-msg-handler';
@@ -11,6 +12,10 @@ describe('CallMsgHandlerFactory', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: StationRepository,
+          useValue: {},
+        },
         {
           provide: ByChargePointOperationMessageGenerator,
           useValue: {},
