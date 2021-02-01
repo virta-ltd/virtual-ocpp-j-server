@@ -5,7 +5,7 @@ import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-facto
 import { RemoteStartTransactionMsgHandler } from './handler/call-msg/remote-start-transaction-msg-handler';
 import { RemoteStopTransactionMsgHandler } from './handler/call-msg/remote-stop-transaction-msg-handler';
 import { ResetMsgHandler } from './handler/call-msg/reset-msg-handler';
-import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-factory';
+import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-handler-factory';
 import { StartTransactionResultMsgHandler } from './handler/call-result-msg/start-transaction-result-msg-handler';
 import { StopTransactionResultMsgHandler } from './handler/call-result-msg/stop-transaction-result-msg-handler';
 import { StationWebSocketService } from './station-websocket.service';

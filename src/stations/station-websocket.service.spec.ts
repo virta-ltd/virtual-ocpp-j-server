@@ -7,15 +7,13 @@ import { ByChargePointOperationMessageGenerator } from '../message/by-charge-poi
 import { StationRepository } from './station.repository';
 // @ts-ignore
 import * as utils from './utils';
+import { flushPromises } from '../jest/helper';
 jest.mock('ws');
 
 const mockStationRepository = () => ({
   updateStation: jest.fn(),
 });
 
-// https://stackoverflow.com/questions/52177631/jest-timer-and-promise-dont-work-well-settimeout-and-async-function
-// https://github.com/facebook/jest/issues/2157
-const flushPromises = () => new Promise(resolve => setImmediate(resolve));
 describe('StationWebSocketService', () => {
   let station: Station;
   let stationWebSocketService: StationWebSocketService;

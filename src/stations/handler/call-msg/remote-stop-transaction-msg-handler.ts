@@ -8,17 +8,21 @@ import { StationWebSocketClient } from '../../station-websocket-client';
 import { Station } from '../../station.entity';
 import { CallMsgHandlerInterface } from './call-msg-handler-interface';
 import { OperationNameFromChargePoint } from '../../../models/OperationNameFromChargePoint';
+import { StationRepository } from '../../station.repository';
+import { InjectRepository } from '@nestjs/typeorm';
+import { CreateOrUpdateStationDto } from '../../dto/create-update-station.dto';
+import { calculatePowerUsageInWh } from '../../utils';
 
 @Injectable()
 export class RemoteStopTransactionMsgHandler implements CallMsgHandlerInterface {
   private logger = new Logger(RemoteStopTransactionMsgHandler.name);
-  public constructor(private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator) {}
+  public constructor(
+    @InjectRepository(StationRepository)
+    private stationRepository: StationRepository,
+    private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
+  ) {}
 
   public async handle(wsClient: StationWebSocketClient, station: Station, requestFromCS: string): Promise<void> {
-    // const dto = new CreateOrUpdateStationDto();
-    // dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
-    // this.stationRepository.updateStation(station, dto);
-
     // parse message & build response
     await station.reload();
     const parsedMessage = JSON.parse(requestFromCS);
@@ -32,6 +36,10 @@ export class RemoteStopTransactionMsgHandler implements CallMsgHandlerInterface 
     wsClient.send(responseMsg);
 
     if (response.status === RemoteStartStopStatusEnum.Accepted) {
+      const dto = new CreateOrUpdateStationDto();
+      dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+      this.stationRepository.updateStation(station, dto);
+
       const stopTransactionMsg = this.byChargePointOperationMessageGenerator.createMessage(
         OperationNameFromChargePoint.StopTransaction,
         station,

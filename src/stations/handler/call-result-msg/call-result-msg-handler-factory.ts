@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OperationNameFromChargePoint } from '../../..//models/OperationNameFromChargePoint';
+import { OperationNameFromChargePoint } from '../../../models/OperationNameFromChargePoint';
 import { CallResultMsgHandlerInterface } from './call-result-msg-handler-interface';
 import { StartTransactionResultMsgHandler } from './start-transaction-result-msg-handler';
 import { StopTransactionResultMsgHandler } from './stop-transaction-result-msg-handler';
