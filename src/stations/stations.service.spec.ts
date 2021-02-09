@@ -7,6 +7,7 @@ import { Station } from './station.entity';
 import { StationRepository } from './station.repository';
 import { StationsService } from './stations.service';
 import { BadRequestException } from '@nestjs/common';
+import { StationWebSocketClient } from './station-websocket-client';
 
 jest.mock('ws');
 
@@ -15,6 +16,10 @@ const mockStationRepository = () => ({
   findOne: jest.fn(),
   createStation: jest.fn(),
   updateStation: jest.fn(),
+});
+
+const mockStationWebSocketService = () => ({
+  createStationWebSocket: (station: Station) => new StationWebSocketClient(station.centralSystemUrl),
 });
 
 describe('StationsService', () => {
@@ -26,7 +31,10 @@ describe('StationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [MessageModule],
       providers: [
-        StationWebSocketService,
+        {
+          provide: StationWebSocketService,
+          useFactory: mockStationWebSocketService,
+        },
         StationsService,
         {
           provide: StationRepository,
@@ -134,7 +142,7 @@ describe('StationsService', () => {
       station1.identity = 'station1';
       const station2 = new Station();
       station2.identity = 'station2';
-      stationWebSocketService.createStationWebSocket = jest.fn().mockImplementation();
+      stationWebSocketService.createStationWebSocket = jest.fn();
       stationService.getStations = jest.fn().mockResolvedValue([station1, station2]);
 
       await stationService.connectAllStationsToCentralSystem();
