@@ -1,23 +1,19 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
-import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
-import { StationRepository } from './station.repository';
 import { calculatePowerUsageInWh } from './utils';
 import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
 import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
 import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-handler-factory';
+import { OperationNameFromChargePoint } from '../models/OperationNameFromChargePoint';
 
 @Injectable()
 export class StationWebSocketService {
   private logger = new Logger(StationWebSocketService.name);
   constructor(
-    @InjectRepository(StationRepository)
-    private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
     private callMsgHandlerFactory: CallMsgHandlerFactory,
     private callResultMsgHandlerFactory: CallResultMsgHandlerFactory,
@@ -50,7 +46,8 @@ export class StationWebSocketService {
       station,
       wsClient.getMessageIdForCall(),
     );
-    this.sendMessageToCS(wsClient, bootMessage, 'BootNotification');
+    this.logger.verbose(`Sending BootNotification message for station ${wsClient.stationIdentity}: ${bootMessage}`);
+    wsClient.sendCallMsgForOperation(bootMessage, OperationNameFromChargePoint.BootNotification);
 
     this.createHeartbeatInterval(wsClient, station);
 
@@ -67,11 +64,12 @@ export class StationWebSocketService {
       if (wsClient.meterValueInterval) return;
 
       const heartbeatMessage = this.byChargePointOperationMessageGenerator.createMessage(
-        'Heartbeat',
+        OperationNameFromChargePoint.Heartbeat,
         station,
         wsClient.getMessageIdForCall(),
       );
-      this.sendMessageToCS(wsClient, heartbeatMessage, 'Heartbeat');
+      this.logger.verbose(`Sending Heartbeat message for station ${wsClient.stationIdentity}: ${heartbeatMessage}`);
+      wsClient.sendCallMsgForOperation(heartbeatMessage, OperationNameFromChargePoint.Heartbeat);
     }, 60000);
   }
 
@@ -85,12 +83,13 @@ export class StationWebSocketService {
       await station.save();
 
       const message = this.byChargePointOperationMessageGenerator.createMessage(
-        'MeterValues',
+        OperationNameFromChargePoint.MeterValues,
         station,
         wsClient.getMessageIdForCall(),
         { value: station.meterValue },
       );
-      this.sendMessageToCS(wsClient, message, 'MeterValues');
+      this.logger.verbose(`Sending MeterValues message for station ${wsClient.stationIdentity}: ${message}`);
+      wsClient.sendCallMsgForOperation(message, OperationNameFromChargePoint.MeterValues);
     }, 60000);
   }
 
@@ -163,21 +162,19 @@ export class StationWebSocketService {
     }
   };
 
-  private async updateStationMeterValue(station: Station, operationName: string) {
-    if (operationName === 'StopTransaction') {
-      const dto = new CreateOrUpdateStationDto();
-      dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
-      this.stationRepository.updateStation(station, dto);
-    }
-  }
-
   public async prepareAndSendMessageToCentralSystem(
     wsClient: StationWebSocketClient,
     station: Station,
     operationName: string,
     payload: StationOperationDto,
   ) {
-    await this.updateStationMeterValue(station, operationName);
+
+    // for case when message is sent from UI (maybe not needed, refactor?)
+    // if (operationName === 'StopTransaction') {
+    //   const dto = new CreateOrUpdateStationDto();
+    //   dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+    //   this.stationRepository.updateStation(station, dto);
+    // }
 
     const message = this.byChargePointOperationMessageGenerator.createMessage(
       operationName,
@@ -190,7 +187,7 @@ export class StationWebSocketService {
       throw new BadRequestException(`Cannot form message for operation ${operationName}`);
     }
 
-    this.sendMessageToCS(wsClient, message, operationName);
+    wsClient.sendCallMsgForOperation(message, operationName);
     wsClient.expectingCallResult = true;
 
     const response = await this.waitForMessage(wsClient);
@@ -201,16 +198,10 @@ export class StationWebSocketService {
     return { request: message, response };
   }
 
-  private sendMessageToCS(wsClient: StationWebSocketClient, message: string, operationName: string) {
-    wsClient.callMessageOperationFromStation = operationName;
-    this.logger.verbose(`Sending message for station ${wsClient.stationIdentity}: ${message}`);
-    wsClient.send(message);
-  }
-
   public waitForMessage = (wsClient: StationWebSocketClient): Promise<string | null> => {
     return new Promise<string | null>(resolve => {
-      const maxNumberOfAttemps = 50;
-      const intervalTime = 200;
+      const maxNumberOfAttemps = 20;
+      const intervalTime = 500;
 
       let currentAttemp = 0;
 
