@@ -14,14 +14,14 @@ export class CallMsgHandlerFactory {
   ) {}
 
   getHandler(operationName: OperationNameFromCentralSystem): CallMsgHandlerInterface | null {
-    switch (operationName) {
-      case OperationNameFromCentralSystem.RemoteStartTransaction: {
+    switch (operationName.toLowerCase()) {
+      case OperationNameFromCentralSystem.RemoteStartTransaction.toLowerCase(): {
         return this.remoteStartTransactionMsgHandler;
       }
-      case OperationNameFromCentralSystem.RemoteStopTransaction: {
+      case OperationNameFromCentralSystem.RemoteStopTransaction.toLowerCase(): {
         return this.remoteStopTransactionMsgHandler;
       }
-      case OperationNameFromCentralSystem.Reset: {
+      case OperationNameFromCentralSystem.Reset.toLowerCase(): {
         return this.resetMsgHandler;
       }
       default:
