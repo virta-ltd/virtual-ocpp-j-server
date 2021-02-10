@@ -10,7 +10,7 @@ import { StationRepository } from './station.repository';
 import { calculatePowerUsageInWh } from './utils';
 import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
 import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
-import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-factory';
+import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-handler-factory';
 
 @Injectable()
 export class StationWebSocketService {
@@ -96,12 +96,21 @@ export class StationWebSocketService {
 
   public onMessage = (wsClient: StationWebSocketClient, station: Station, data: string) => {
     let parsedMessage: any;
-    parsedMessage = JSON.parse(data);
+    try {
+      parsedMessage = JSON.parse(data);
+    } catch (error) {
+      this.logger.error(`Error parsing message: ${data}`);
+      return;
+    }
+
     const messageType = parsedMessage[0] as ChargePointMessageTypes;
 
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
         const operationName = parsedMessage[2] as OperationNameFromCentralSystem;
+        this.logger.log(
+          `Received Call message (identity: ${station.identity}) for operation ${operationName}: ${data}`,
+        );
         const msgHandler = this.callMsgHandlerFactory.getHandler(operationName);
         msgHandler?.handle(wsClient, station, data);
         break;
