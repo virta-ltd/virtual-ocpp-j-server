@@ -21,4 +21,13 @@ export class StationWebSocketClient extends WebSocket {
     return this._lastMessageId;
   }
   public getMessageIdForCall = (): number => (this._lastMessageId += 1);
+
+  public sendCallMsgForOperation(msg: string, operationName: string) {
+    this.send(msg);
+    this.callMessageOperationFromStation = operationName;
+  }
+
+  public isLastMessageIdSimilar(reqId: string) {
+    return this._lastMessageId.toString() === reqId;
+  }
 }

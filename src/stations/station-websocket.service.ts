@@ -1,29 +1,22 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { StartTransactionResponse } from '../models/StartTransactionResponse';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
 import { ChargePointMessageTypes } from '../models/ChargePointMessageTypes';
-import { CreateOrUpdateStationDto } from './dto/create-update-station.dto';
 import { StationOperationDto } from './dto/station-operation-dto';
 import { StationWebSocketClient } from './station-websocket-client';
 import { Station } from './station.entity';
-import { StationRepository } from './station.repository';
-import { IdTagInfoStatusEnum } from '../models/IdTagInfoStatusEnum';
-import { StopTransactionResponse } from '../models/StopTransactionResponse';
 import { calculatePowerUsageInWh } from './utils';
-import { RemoteStartTransactionRequest } from '../models/RemoteStartTransactionRequest';
-import { RemoteStopTransactionRequest } from '../models/RemoteStopTransactionRequest';
-import { RemoteStartTransactionResponse } from '../models/RemoteStartTransactionResponse';
-import { RemoteStopTransactionResponse } from '../models/RemoteStopTransactionResponse';
-import { RemoteStartStopStatusEnum } from '../models/RemoteStartStopStatusEnum';
+import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
+import { OperationNameFromCentralSystem } from '../models/OperationNameFromCentralSystem';
+import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-handler-factory';
+import { OperationNameFromChargePoint } from '../models/OperationNameFromChargePoint';
 
 @Injectable()
 export class StationWebSocketService {
   private logger = new Logger(StationWebSocketService.name);
   constructor(
-    @InjectRepository(StationRepository)
-    private stationRepository: StationRepository,
     private byChargePointOperationMessageGenerator: ByChargePointOperationMessageGenerator,
+    private callMsgHandlerFactory: CallMsgHandlerFactory,
+    private callResultMsgHandlerFactory: CallResultMsgHandlerFactory,
   ) {}
 
   public createStationWebSocket = (station: Station): StationWebSocketClient => {
@@ -53,7 +46,8 @@ export class StationWebSocketService {
       station,
       wsClient.getMessageIdForCall(),
     );
-    this.sendMessageToCS(wsClient, bootMessage, 'BootNotification');
+    this.logger.verbose(`Sending BootNotification message for station ${wsClient.stationIdentity}: ${bootMessage}`);
+    wsClient.sendCallMsgForOperation(bootMessage, OperationNameFromChargePoint.BootNotification);
 
     this.createHeartbeatInterval(wsClient, station);
 
@@ -70,11 +64,12 @@ export class StationWebSocketService {
       if (wsClient.meterValueInterval) return;
 
       const heartbeatMessage = this.byChargePointOperationMessageGenerator.createMessage(
-        'Heartbeat',
+        OperationNameFromChargePoint.Heartbeat,
         station,
         wsClient.getMessageIdForCall(),
       );
-      this.sendMessageToCS(wsClient, heartbeatMessage, 'Heartbeat');
+      this.logger.verbose(`Sending Heartbeat message for station ${wsClient.stationIdentity}: ${heartbeatMessage}`);
+      wsClient.sendCallMsgForOperation(heartbeatMessage, OperationNameFromChargePoint.Heartbeat);
     }, 60000);
   }
 
@@ -88,27 +83,60 @@ export class StationWebSocketService {
       await station.save();
 
       const message = this.byChargePointOperationMessageGenerator.createMessage(
-        'MeterValues',
+        OperationNameFromChargePoint.MeterValues,
         station,
         wsClient.getMessageIdForCall(),
         { value: station.meterValue },
       );
-      this.sendMessageToCS(wsClient, message, 'MeterValues');
+      this.logger.verbose(`Sending MeterValues message for station ${wsClient.stationIdentity}: ${message}`);
+      wsClient.sendCallMsgForOperation(message, OperationNameFromChargePoint.MeterValues);
     }, 60000);
   }
 
   public onMessage = (wsClient: StationWebSocketClient, station: Station, data: string) => {
     let parsedMessage: any;
-    parsedMessage = JSON.parse(data);
+    try {
+      parsedMessage = JSON.parse(data);
+    } catch (error) {
+      this.logger.error(`Error parsing message: ${data}`);
+      return;
+    }
 
     const messageType = parsedMessage[0] as ChargePointMessageTypes;
+
     switch (messageType) {
       case ChargePointMessageTypes.Call: {
-        this.processCallMsgFromCS(wsClient, station, data);
+        const operationName = parsedMessage[2] as OperationNameFromCentralSystem;
+        this.logger.log(
+          `Received Call message (identity: ${station.identity}) for operation ${operationName}: ${data}`,
+        );
+        const msgHandler = this.callMsgHandlerFactory.getHandler(operationName);
+        msgHandler?.handle(wsClient, station, data);
         break;
       }
+
       case ChargePointMessageTypes.CallResult: {
-        this.processCallResultMsgFromCS(wsClient, station, data);
+        const [, reqId] = parsedMessage as [number, string, object];
+
+        this.logger.log(
+          `Received CallResult message (identity: ${station.identity}) for operation ${wsClient.callMessageOperationFromStation}: ${data}`,
+        );
+
+        if (!wsClient.isLastMessageIdSimilar(reqId)) {
+          this.logger.error(
+            `Received incorrect reqId. wsClient.lastMessageId: ${wsClient.lastMessageId}. Received message: ${data}`,
+            null,
+            `Identity ${station.identity}`,
+          );
+          return;
+        }
+
+        const msgHandler = this.callResultMsgHandlerFactory.getHandler(wsClient.callMessageOperationFromStation);
+        msgHandler?.handle(wsClient, station, parsedMessage);
+
+        wsClient.callResultMessageFromCS = wsClient.expectingCallResult ? data : null;
+        wsClient.callMessageOperationFromStation = '';
+
         break;
       }
       default:
@@ -128,18 +156,11 @@ export class StationWebSocketService {
       const connectedDurationInSeconds = (new Date().getTime() - wsClient.connectedTime.getTime()) / 1000;
       const connectedMinutes = Math.floor(connectedDurationInSeconds / 60);
       const extraConnectedSeconds = connectedDurationInSeconds % 60;
-      this.logger.log(`Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds.
-Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
+      this.logger.log(
+        `Duration of the connection: ${connectedMinutes} minutes & ${extraConnectedSeconds} seconds. Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`,
+      );
     }
   };
-
-  private async updateStationMeterValue(station: Station, operationName: string) {
-    if (operationName === 'StopTransaction') {
-      const dto = new CreateOrUpdateStationDto();
-      dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
-      this.stationRepository.updateStation(station, dto);
-    }
-  }
 
   public async prepareAndSendMessageToCentralSystem(
     wsClient: StationWebSocketClient,
@@ -147,7 +168,13 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     operationName: string,
     payload: StationOperationDto,
   ) {
-    await this.updateStationMeterValue(station, operationName);
+
+    // for case when message is sent from UI (maybe not needed, refactor?)
+    // if (operationName === 'StopTransaction') {
+    //   const dto = new CreateOrUpdateStationDto();
+    //   dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
+    //   this.stationRepository.updateStation(station, dto);
+    // }
 
     const message = this.byChargePointOperationMessageGenerator.createMessage(
       operationName,
@@ -160,7 +187,7 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
       throw new BadRequestException(`Cannot form message for operation ${operationName}`);
     }
 
-    this.sendMessageToCS(wsClient, message, operationName);
+    wsClient.sendCallMsgForOperation(message, operationName);
     wsClient.expectingCallResult = true;
 
     const response = await this.waitForMessage(wsClient);
@@ -171,16 +198,10 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
     return { request: message, response };
   }
 
-  private sendMessageToCS(wsClient: StationWebSocketClient, message: string, operationName: string) {
-    wsClient.callMessageOperationFromStation = operationName;
-    this.logger.verbose(`Sending message for station ${wsClient.stationIdentity}: ${message}`);
-    wsClient.send(message);
-  }
-
   public waitForMessage = (wsClient: StationWebSocketClient): Promise<string | null> => {
     return new Promise<string | null>(resolve => {
-      const maxNumberOfAttemps = 50;
-      const intervalTime = 200;
+      const maxNumberOfAttemps = 20;
+      const intervalTime = 500;
 
       let currentAttemp = 0;
 
@@ -198,144 +219,4 @@ Closing connection ${station.identity}. Code: ${code}. Reason: ${reason}.`);
       }, intervalTime);
     });
   };
-
-  public async processCallMsgFromCS(
-    wsClient: StationWebSocketClient,
-    station: Station,
-    request: string,
-  ): Promise<void> {
-    this.logger.log('Processing request from CS', request);
-    try {
-      const parsedMessage = JSON.parse(request);
-      const [, uniqueId, action, payload] = parsedMessage as [number, string, string, object];
-      switch (action.toLowerCase()) {
-        case 'remotestarttransaction': {
-          const { idTag } = payload as RemoteStartTransactionRequest;
-          const responseMessage = this.buildCallResultToCSMessage(
-            station,
-            { status: RemoteStartStopStatusEnum.Accepted },
-            uniqueId,
-            action,
-          );
-          this.sendMessageToCS(wsClient, responseMessage, '');
-          this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StartTransaction', { idTag });
-          break;
-        }
-        case 'remotestoptransaction': {
-          await station.reload();
-          const { transactionId } = payload as RemoteStopTransactionRequest;
-          let status = RemoteStartStopStatusEnum.Accepted;
-          if (station.currentTransactionId !== transactionId) {
-            this.logger.error(
-              `Different transaction_ID received: ${transactionId}. Current transactionId: ${station.currentTransactionId}`,
-            );
-            status = RemoteStartStopStatusEnum.Rejected;
-          }
-          const responseMessage = this.buildCallResultToCSMessage(station, { status }, uniqueId, action);
-          this.sendMessageToCS(wsClient, responseMessage, '');
-
-          if (status === RemoteStartStopStatusEnum.Accepted) {
-            this.prepareAndSendMessageToCentralSystem(wsClient, station, 'StopTransaction', {});
-          }
-          break;
-        }
-        case 'reset': {
-          const responseMessage = this.buildCallResultToCSMessage(station, { status: 'Accepted' }, uniqueId, action);
-          this.sendMessageToCS(wsClient, responseMessage, '');
-          station.chargeInProgress = false;
-          station.currentTransactionId = null;
-          await station.save();
-          wsClient.close(1012, 'Reset requested by Central System');
-          break;
-        }
-      }
-    } catch (error) {
-      this.logger.error(`Error processing request from CS`, error.stack ?? '', error.message ?? '');
-    }
-  }
-
-  private buildCallResultToCSMessage(station: Station, payload: any, uniqueId: string, operationName: string): string {
-    let responsePayload: any = {};
-    switch (operationName.toLowerCase()) {
-      case 'remotestarttransaction': {
-        responsePayload = new RemoteStartTransactionResponse();
-        responsePayload.status = payload.status;
-        break;
-      }
-      case 'remotestoptransaction': {
-        responsePayload = new RemoteStopTransactionResponse();
-        responsePayload.status = payload.status;
-        break;
-      }
-      case 'reset': {
-        responsePayload.status = 'Accepted';
-        break;
-      }
-    }
-    const responseMessage = JSON.stringify([ChargePointMessageTypes.CallResult, uniqueId, responsePayload]);
-    this.logger.debug(`Send response message back to CS: ${responseMessage}`);
-    return responseMessage;
-  }
-
-  public processCallResultMsgFromCS(wsClient: StationWebSocketClient, station: Station, response: string) {
-    try {
-      const parsedMessage = JSON.parse(response);
-      const [, reqId, payload] = parsedMessage as [number, string, object];
-      if (reqId.toString() !== wsClient.lastMessageId.toString()) return;
-      this.logger.verbose(`Received response for reqId ${wsClient.lastMessageId}: ${response}`);
-
-      switch (wsClient.callMessageOperationFromStation.toLowerCase()) {
-        case 'starttransaction': {
-          const {
-            transactionId,
-            idTagInfo: { status },
-          } = payload as StartTransactionResponse;
-          if (status === IdTagInfoStatusEnum.Accepted && transactionId > 0) {
-            const dto: CreateOrUpdateStationDto = {
-              chargeInProgress: true,
-              currentTransactionId: transactionId,
-            };
-            this.stationRepository.updateStation(station, dto);
-            this.createMeterValueInterval(wsClient, station);
-          }
-          break;
-        }
-
-        case 'stoptransaction': {
-          const {
-            idTagInfo: { status },
-          } = payload as StopTransactionResponse;
-
-          if (status === IdTagInfoStatusEnum.Accepted) {
-            clearInterval(wsClient.meterValueInterval);
-            wsClient.meterValueInterval = null;
-            const dto: CreateOrUpdateStationDto = {
-              chargeInProgress: false,
-              currentTransactionId: null,
-            };
-            this.stationRepository.updateStation(station, dto);
-
-            const availableStatusNotificationMessage = this.byChargePointOperationMessageGenerator.createMessage(
-              'StatusNotification',
-              station,
-              wsClient.getMessageIdForCall(),
-              {},
-            );
-
-            // TODO: add more status + add a bit delay here
-            this.sendMessageToCS(wsClient, availableStatusNotificationMessage, 'StatusNotification');
-          }
-          break;
-        }
-
-        default:
-      }
-
-      wsClient.callResultMessageFromCS = wsClient.expectingCallResult ? response : null;
-    } catch (error) {
-      this.logger.error(`Error processing response`, error.stack ?? '', error.message ?? '');
-    } finally {
-      wsClient.callMessageOperationFromStation = '';
-    }
-  }
 }

@@ -7,15 +7,17 @@ import { ByChargePointOperationMessageGenerator } from '../message/by-charge-poi
 import { StationRepository } from './station.repository';
 // @ts-ignore
 import * as utils from './utils';
+import { flushPromises } from '../jest/helper';
+import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
+import { CallResultMsgHandlerFactory } from './handler/call-result-msg/call-result-msg-handler-factory';
+import { CallMsgHandlerInterface } from './handler/call-msg/call-msg-handler-interface';
+import { CallResultMsgHandlerInterface } from './handler/call-result-msg/call-result-msg-handler-interface';
 jest.mock('ws');
 
 const mockStationRepository = () => ({
   updateStation: jest.fn(),
 });
 
-// https://stackoverflow.com/questions/52177631/jest-timer-and-promise-dont-work-well-settimeout-and-async-function
-// https://github.com/facebook/jest/issues/2157
-const flushPromises = () => new Promise(resolve => setImmediate(resolve));
 describe('StationWebSocketService', () => {
   let station: Station;
   let stationWebSocketService: StationWebSocketService;
@@ -23,10 +25,24 @@ describe('StationWebSocketService', () => {
     createMessage: jest.fn(),
   };
   let stationRepository: StationRepository;
+  let callMsgHandlerFactory: CallMsgHandlerFactory;
+  let callResultMsgHandlerFactory: CallResultMsgHandlerFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: CallMsgHandlerFactory,
+          useValue: {
+            getHandler: jest.fn(),
+          },
+        },
+        {
+          provide: CallResultMsgHandlerFactory,
+          useValue: {
+            getHandler: jest.fn(),
+          },
+        },
         {
           provide: StationRepository,
           useFactory: mockStationRepository,
@@ -40,6 +56,8 @@ describe('StationWebSocketService', () => {
     }).compile();
     stationWebSocketService = module.get<StationWebSocketService>(StationWebSocketService);
     stationRepository = module.get<StationRepository>(StationRepository);
+    callMsgHandlerFactory = module.get<CallMsgHandlerFactory>(CallMsgHandlerFactory);
+    callResultMsgHandlerFactory = module.get<CallResultMsgHandlerFactory>(CallResultMsgHandlerFactory);
 
     station = new Station();
     station.identity = 'test_station';
@@ -69,36 +87,83 @@ describe('StationWebSocketService', () => {
       afterEach(() => {
         jest.clearAllTimers();
       });
-      it('test onMessage for CallResult but lastMessageId do not match', () => {
-        const data = `[3,\"4\",{\"status\":\"Accepted\",\"currentTime\":\"2020-11-01T18:00:11.585620Z\",\"interval\":60}]`;
 
-        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+      describe('message cannot be parsed', () => {
+        it('tests bad message that cannot be parsed', () => {
+          const data = `random data`;
 
-        expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
-        expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+          expect(callMsgHandlerFactory.getHandler).not.toHaveBeenCalled();
+          expect(callResultMsgHandlerFactory.getHandler).not.toHaveBeenCalled();
+        });
       });
 
-      it('test onMessage for but does not expect callResult', () => {
-        const messageId = stationWebSocketClient.getMessageIdForCall();
+      describe('onMessage for CallMessage type', () => {
+        const operationName = 'RemoteStartTransaction';
+        const data = `[2,\"6fbde719-c7aa-40c4-b4f9-282edbfd502e\",\"${operationName}\",{\"idTag\":\"CUID40041\",\"connectorId\":1}]`;
+        it('test that callMsgHandlerFactory is called and handle method is called', () => {
+          const mockHandler: CallMsgHandlerInterface = { handle: jest.fn() };
+          callMsgHandlerFactory.getHandler = jest.fn().mockReturnValue(mockHandler);
 
-        const data = `[3,\"${messageId}\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
-        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+          expect(callMsgHandlerFactory.getHandler).toHaveBeenCalledWith(operationName);
+          expect(mockHandler.handle).toHaveBeenCalledWith(stationWebSocketClient, station, data);
+        });
 
-        expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
-        expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+        it('test that handle method is not called if callMsgHandlerFactory returns null', () => {
+          callMsgHandlerFactory.getHandler = jest.fn().mockReturnValue(null);
+
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+          expect(callMsgHandlerFactory.getHandler).toHaveBeenCalledWith(operationName);
+        });
       });
 
-      it('test onMessage when expecting callResult', () => {
-        const messageId = stationWebSocketClient.getMessageIdForCall();
-        stationWebSocketClient.expectingCallResult = true;
+      describe('onMessage for CallResultMessage type', () => {
+        const operationName = 'StopTransaction';
 
-        const data = `[3,\"${messageId}\",{\"currentTime\":\"2020-11-01T18:08:19.170Z\"}]`;
+        beforeEach(() => {
+          stationWebSocketClient.callMessageOperationFromStation = operationName;
+        });
 
-        stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+        it('tests that CallResultMsgHandlerFactory.getHandler is not called if reqId does not match', () => {
+          const wrongMessageId = 2000;
+          const data = `[3,"${wrongMessageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
+          stationWebSocketClient.callMessageOperationFromStation = operationName;
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
-        expect(stationWebSocketClient.expectingCallResult).toBeTruthy();
-        expect(stationWebSocketClient.callResultMessageFromCS).toEqual(data);
+          expect(callResultMsgHandlerFactory.getHandler).not.toHaveBeenCalled();
+        });
+
+        it('tests that getHandler is called when messageId is correct, handle() is called from handler, callMessageOperationFromStation & callResultMessageFromCS are emptied', () => {
+          const messageId = stationWebSocketClient.getMessageIdForCall();
+          const data = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
+
+          const mockHandler: CallResultMsgHandlerInterface = { handle: jest.fn() };
+          callResultMsgHandlerFactory.getHandler = jest.fn().mockReturnValue(mockHandler);
+
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+          expect(callResultMsgHandlerFactory.getHandler).toHaveBeenCalledWith(operationName);
+          expect(mockHandler.handle).toHaveBeenCalledWith(stationWebSocketClient, station, JSON.parse(data));
+          expect(stationWebSocketClient.callMessageOperationFromStation).toEqual('');
+          expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
+          expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+        });
+
+        it('tests that callResultMessageFromCS is populated with sent message if client.expectingCallResult is true', () => {
+          stationWebSocketClient.expectingCallResult = true;
+
+          const messageId = stationWebSocketClient.getMessageIdForCall();
+          const data = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
+          callResultMsgHandlerFactory.getHandler = jest.fn().mockReturnValue({ handle: jest.fn() });
+
+          stationWebSocketService.onMessage(stationWebSocketClient, station, data);
+
+          expect(stationWebSocketClient.callResultMessageFromCS).toEqual(data);
+        });
       });
     });
 
@@ -282,212 +347,6 @@ describe('StationWebSocketService', () => {
       }
 
       expect(clearInterval).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('processCallMsgFromCS', () => {
-    let stationWebSocketClient: StationWebSocketClient;
-    const uniqueId = 'abc';
-    beforeEach(() => {
-      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
-      stationWebSocketService.prepareAndSendMessageToCentralSystem = jest.fn();
-      station.reload = jest.fn().mockResolvedValue(station);
-      station.save = jest.fn().mockResolvedValue(station);
-    });
-
-    test('parseErrorMessage', () => {
-      const requestMessage = 'abc';
-
-      stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
-
-      expect(stationWebSocketClient.send).not.toHaveBeenCalled();
-    });
-
-    describe('RemoteStartTransaction', () => {
-      it('accepts request and sends back StartTransaction with idTag', () => {
-        const idTag = 'TEST_IDTAG';
-        const requestMessage = `[2,"${uniqueId}","RemoteStartTransaction",{"idTag":"TEST_IDTAG","connectorId":1}]`;
-        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
-
-        stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
-
-        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
-        expect(
-          stationWebSocketService.prepareAndSendMessageToCentralSystem,
-        ).toHaveBeenCalledWith(stationWebSocketClient, station, 'StartTransaction', { idTag });
-      });
-    });
-
-    describe('RemoteStopTransaction', () => {
-      it('gets rejected if currentTransactionId does not match', async () => {
-        station.currentTransactionId = 10;
-        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":20}]`;
-        const responseMessage = `[3,"${uniqueId}",{"status":"Rejected"}]`;
-
-        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
-
-        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
-        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).not.toHaveBeenCalled();
-      });
-
-      it('gets accepted if currentTransactionId match', async () => {
-        station.currentTransactionId = 10;
-        const requestMessage = `[2,"${uniqueId}","RemoteStopTransaction",{"transactionId":${station.currentTransactionId}}]`;
-        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
-
-        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
-
-        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
-        expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).toHaveBeenCalledWith(
-          stationWebSocketClient,
-          station,
-          'StopTransaction',
-          {},
-        );
-      });
-    });
-
-    describe('Reset', () => {
-      it('resets station chargeInProgress & currentTransactionId', async () => {
-        station.chargeInProgress = true;
-        station.currentTransactionId = 10;
-        const requestMessage = `[2,"${uniqueId}","Reset",{"type":"Hard"}]`;
-        const responseMessage = `[3,"${uniqueId}",{"status":"Accepted"}]`;
-
-        await stationWebSocketService.processCallMsgFromCS(stationWebSocketClient, station, requestMessage);
-
-        expect(stationWebSocketClient.send).toHaveBeenCalledWith(responseMessage);
-        expect(station.save).toHaveBeenCalledTimes(1);
-        expect(station.chargeInProgress).toEqual(false);
-        expect(station.currentTransactionId).toEqual(null);
-        expect(stationWebSocketClient.close).toHaveBeenCalledWith(1012, 'Reset requested by Central System');
-      });
-    });
-  });
-
-  describe('processCallResultMsgFromCS', () => {
-    let stationWebSocketClient: StationWebSocketClient;
-
-    beforeEach(() => {
-      stationWebSocketClient = stationWebSocketService.createStationWebSocket(station);
-    });
-
-    describe('Unsupported message Or parse error', () => {
-      it('does not do anything if operation is not included', () => {
-        stationWebSocketClient.callMessageOperationFromStation = 'Heartbeat';
-
-        const response = `[3,"28",{"currentTime":"2020-11-04T10:00:05.627Z"}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-
-        expect(stationRepository.updateStation).not.toHaveBeenCalled();
-      });
-
-      it('does not do anything if response cannot be parsed', () => {
-        stationWebSocketClient.callMessageOperationFromStation = 'Heartbeat';
-        const response = `abc`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-
-        expect(stationRepository.updateStation).not.toHaveBeenCalled();
-      });
-    });
-    describe('StartTransaction', () => {
-      beforeEach(() => {
-        stationWebSocketClient.callMessageOperationFromStation = 'StartTransaction';
-      });
-      afterEach(() => {
-        jest.clearAllTimers();
-      });
-
-      it('does nothing if idTagInfo status is Blocked', () => {
-        const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T10:46:50Z"}}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-        expect(stationRepository.updateStation).not.toHaveBeenCalled();
-        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
-      });
-
-      it('does nothing if transactionId is < 0', () => {
-        const response = `[3,"9",{"transactionId":0,"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-        expect(stationRepository.updateStation).not.toHaveBeenCalled();
-        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
-      });
-
-      it('update station chargeInProgress & currentTransactionId if status is Accepted and transactionId > 0', async () => {
-        jest.useFakeTimers();
-        const usedPower = 20;
-        const initialMeterValue = 10;
-        jest.spyOn(utils, 'calculatePowerUsageInWh').mockReturnValue(usedPower);
-        station.meterValue = initialMeterValue;
-        station.updatedAt = new Date();
-        station.reload = jest.fn().mockResolvedValue(station);
-        station.save = jest.fn().mockResolvedValue(station);
-        const messageId = stationWebSocketClient.getMessageIdForCall();
-        const transactionId = 1;
-        const response = `[3,"${messageId}",{"transactionId":${transactionId},"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:46:50Z"}}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-        expect(stationRepository.updateStation).toHaveBeenCalledWith(
-          station,
-          expect.objectContaining({ chargeInProgress: true, currentTransactionId: transactionId }),
-        );
-
-        const message = 'messagetext';
-        mockByChargePointOperationMessageGenerator.createMessage = jest.fn().mockReturnValue(message);
-
-        expect(clearInterval).toHaveBeenCalled();
-        expect(setInterval).toHaveBeenCalledTimes(1);
-        expect(stationWebSocketClient.meterValueInterval).not.toBeNull();
-        expect(stationWebSocketClient.callMessageOperationFromStation).toStrictEqual('');
-        jest.advanceTimersByTime(60000);
-        await flushPromises();
-        expect(station.reload).toHaveBeenCalledTimes(1);
-        expect(station.save).toHaveBeenCalledTimes(1);
-        expect(station.meterValue).toEqual(initialMeterValue + usedPower);
-        expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
-          'MeterValues',
-          station,
-          stationWebSocketClient.lastMessageId,
-          { value: station.meterValue },
-        );
-        expect(stationWebSocketClient.send).toHaveBeenCalledWith(message);
-      });
-    });
-
-    describe('StopTransaction', () => {
-      beforeEach(() => {
-        jest.useFakeTimers();
-        stationWebSocketClient.callMessageOperationFromStation = 'StopTransaction';
-        stationWebSocketClient.meterValueInterval = setInterval(() => {}, 60000);
-      });
-
-      afterEach(() => {
-        jest.clearAllTimers();
-      });
-
-      it('does nothing if idTagInfo status is not Accepted', () => {
-        const response = `[3,"15",{"idTagInfo":{"status":"Blocked","expiryDate":"2020-11-04T09:53:59.031Z"}}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-        expect(stationWebSocketClient.meterValueInterval).not.toBeNull();
-        expect(stationRepository.updateStation).not.toHaveBeenCalled();
-      });
-
-      it('update station chargeInProgress & currentTransactionId if status is Accepted', () => {
-        const messageId = stationWebSocketClient.getMessageIdForCall();
-        const response = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2020-11-04T10:57:41Z"}}]`;
-
-        stationWebSocketService.processCallResultMsgFromCS(stationWebSocketClient, station, response);
-
-        expect(stationRepository.updateStation).toHaveBeenCalledWith(
-          station,
-          expect.objectContaining({ chargeInProgress: false, currentTransactionId: null }),
-        );
-        expect(stationWebSocketClient.meterValueInterval).toBeNull();
-      });
     });
   });
 });
