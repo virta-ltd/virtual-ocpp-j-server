@@ -136,6 +136,7 @@ export class StationWebSocketService {
 
         wsClient.callResultMessageFromCS = wsClient.expectingCallResult ? data : null;
         wsClient.callMessageOperationFromStation = '';
+        wsClient.clearRemoveCallMsgOperationNameTimer();
 
         break;
       }
@@ -168,7 +169,6 @@ export class StationWebSocketService {
     operationName: string,
     payload: StationOperationDto,
   ) {
-
     // for case when message is sent from UI (maybe not needed, refactor?)
     // if (operationName === 'StopTransaction') {
     //   const dto = new CreateOrUpdateStationDto();

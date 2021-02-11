@@ -121,24 +121,30 @@ describe('StationWebSocketService', () => {
         });
       });
 
-      describe('onMessage for CallResultMessage type', () => {
+      describe('onMessage for CallResult message type', () => {
         const operationName = 'StopTransaction';
 
         beforeEach(() => {
           stationWebSocketClient.callMessageOperationFromStation = operationName;
+          stationWebSocketClient.clearRemoveCallMsgOperationNameTimer = jest.fn();
         });
 
         it('tests that CallResultMsgHandlerFactory.getHandler is not called if reqId does not match', () => {
-          const wrongMessageId = 2000;
-          const data = `[3,"${wrongMessageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
+          stationWebSocketClient.isLastMessageIdSimilar = jest.fn().mockReturnValue(false);
+          const messageId = 2000;
+          const data = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
+
           stationWebSocketClient.callMessageOperationFromStation = operationName;
           stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
+          expect(stationWebSocketClient.isLastMessageIdSimilar).toHaveBeenCalledWith(`${messageId}`);
           expect(callResultMsgHandlerFactory.getHandler).not.toHaveBeenCalled();
+          expect(stationWebSocketClient.clearRemoveCallMsgOperationNameTimer).not.toHaveBeenCalled();
         });
 
         it('tests that getHandler is called when messageId is correct, handle() is called from handler, callMessageOperationFromStation & callResultMessageFromCS are emptied', () => {
-          const messageId = stationWebSocketClient.getMessageIdForCall();
+          stationWebSocketClient.isLastMessageIdSimilar = jest.fn().mockReturnValue(true);
+          const messageId = 3;
           const data = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
 
           const mockHandler: CallResultMsgHandlerInterface = { handle: jest.fn() };
@@ -146,15 +152,18 @@ describe('StationWebSocketService', () => {
 
           stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
+          expect(stationWebSocketClient.isLastMessageIdSimilar).toHaveBeenCalledWith(`${messageId}`);
           expect(callResultMsgHandlerFactory.getHandler).toHaveBeenCalledWith(operationName);
           expect(mockHandler.handle).toHaveBeenCalledWith(stationWebSocketClient, station, JSON.parse(data));
           expect(stationWebSocketClient.callMessageOperationFromStation).toEqual('');
           expect(stationWebSocketClient.expectingCallResult).toBeFalsy();
           expect(stationWebSocketClient.callResultMessageFromCS).toBeNull();
+          expect(stationWebSocketClient.clearRemoveCallMsgOperationNameTimer).toHaveBeenCalled();
         });
 
         it('tests that callResultMessageFromCS is populated with sent message if client.expectingCallResult is true', () => {
           stationWebSocketClient.expectingCallResult = true;
+          stationWebSocketClient.isLastMessageIdSimilar = jest.fn().mockReturnValue(true);
 
           const messageId = stationWebSocketClient.getMessageIdForCall();
           const data = `[3,"${messageId}",{"idTagInfo":{"status":"Accepted","expiryDate":"2021-02-09T14:55:54Z"}}]`;
@@ -163,6 +172,7 @@ describe('StationWebSocketService', () => {
           stationWebSocketService.onMessage(stationWebSocketClient, station, data);
 
           expect(stationWebSocketClient.callResultMessageFromCS).toEqual(data);
+          expect(stationWebSocketClient.clearRemoveCallMsgOperationNameTimer).toHaveBeenCalled();
         });
       });
     });
