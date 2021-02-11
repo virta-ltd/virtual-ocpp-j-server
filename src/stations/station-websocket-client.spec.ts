@@ -30,11 +30,15 @@ describe('StationWebSocketClient', () => {
     it('test lastMessageId & getMessageId for call', () => {
       expect(client.lastMessageId).toEqual(0);
       expect(client.getMessageIdForCall()).toEqual(1);
-      expect(client.lastMessageId).toEqual(1);
+
+      expect(client.pendingMessageId).toEqual(1);
+      expect(client.lastMessageId).toEqual(0);
     });
 
     it('returns true if reqId is equal', () => {
+      jest.useFakeTimers();
       expect(client.getMessageIdForCall()).toEqual(1);
+      client.sendCallMsgForOperation('abc', 'def');
       expect(client.isLastMessageIdSimilar('1')).toBeTruthy();
     });
 
@@ -45,16 +49,63 @@ describe('StationWebSocketClient', () => {
   });
 
   describe('sendCallMsgForOperation', () => {
-    it('sets operationName & send message', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.clearAllTimers();
+    });
+
+    it('does not send message if there is ongoing callMessageOperation', () => {
+      const client = new StationWebSocketClient('localhost');
+      client.send = jest.fn();
+      client.callMessageOperationFromStation = 'BootNotification';
+
+      client.sendCallMsgForOperation('message_data', 'MeterValues');
+
+      expect(client.send).not.toHaveBeenCalled();
+    });
+
+    it('sets lastMessageId, sets operationName & send message', () => {
       const client = new StationWebSocketClient('localhost');
       client.send = jest.fn();
       const message = 'abc';
       const operationName = 'some_name';
+      const messageId = client.getMessageIdForCall();
+
+      expect(client.lastMessageId).not.toEqual(messageId);
 
       client.sendCallMsgForOperation(message, operationName);
 
+      expect(client.lastMessageId).toEqual(messageId);
       expect(client.send).toHaveBeenCalledWith(message);
       expect(client.callMessageOperationFromStation).toEqual(operationName);
+    });
+
+    it('creates a timeout to clear operationName for 10 seconds', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.send = jest.fn();
+      const message = 'abc';
+      const operationName = 'somename';
+
+      client.sendCallMsgForOperation(message, operationName);
+
+      expect(client.callMessageOperationFromStation).toEqual(operationName);
+
+      jest.advanceTimersByTime(10000);
+
+      expect(client.callMessageOperationFromStation).toEqual('');
+    });
+  });
+
+  describe('clearRemoveCallMsgOperationNameTimer', () => {
+    it('clears timeout of removeCallMsgOperationNameTimer', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.clearRemoveCallMsgOperationNameTimer();
+
+      expect(clearTimeout).toHaveBeenCalled();
     });
   });
 });
