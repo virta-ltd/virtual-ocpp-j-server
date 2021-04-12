@@ -82,7 +82,7 @@ describe('StationWebSocketClient', () => {
       expect(client.callMessageOperationFromStation).toEqual(operationName);
     });
 
-    it('creates a timeout to clear operationName for 10 seconds', () => {
+    it('creates a timeout to clear operationName', () => {
       jest.useFakeTimers();
       const client = new StationWebSocketClient('localhost');
       client.send = jest.fn();
@@ -93,7 +93,10 @@ describe('StationWebSocketClient', () => {
 
       expect(client.callMessageOperationFromStation).toEqual(operationName);
 
-      jest.advanceTimersByTime(10000);
+      const timerInMs =
+        Number(process.env.WAIT_FOR_MESSAGE_CHECK_INTERVAL_IN_MS) *
+        Number(process.env.WAIT_FOR_MESSAGE_CHECK_MAX_ATTEMPTS);
+      jest.advanceTimersByTime(timerInMs);
 
       expect(client.callMessageOperationFromStation).toEqual('');
     });

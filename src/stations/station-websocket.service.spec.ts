@@ -352,7 +352,7 @@ describe('StationWebSocketService', () => {
       });
       expect(setInterval).toHaveBeenCalledTimes(1);
 
-      for (let index = 0; index < 101; index++) {
+      for (let index = 0; index < Number(process.env.WAIT_FOR_MESSAGE_CHECK_MAX_ATTEMPTS) + 1; index++) {
         jest.advanceTimersToNextTimer();
       }
 
