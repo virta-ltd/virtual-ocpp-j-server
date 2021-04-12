@@ -200,13 +200,15 @@ export class StationWebSocketService {
 
   public waitForMessage = (wsClient: StationWebSocketClient): Promise<string | null> => {
     return new Promise<string | null>(resolve => {
-      const maxNumberOfAttemps = 20;
-      const intervalTime = 500;
+      const {
+        WAIT_FOR_MESSAGE_CHECK_INTERVAL_IN_MS: waitForMessageCheckIntervalInMs,
+        WAIT_FOR_MESSAGE_CHECK_MAX_ATTEMPTS: waitForMessageCheckMaxAttempts,
+      } = process.env;
 
       let currentAttemp = 0;
 
       const interval = setInterval(() => {
-        if (currentAttemp > maxNumberOfAttemps - 1) {
+        if (currentAttemp > Number(waitForMessageCheckMaxAttempts) - 1) {
           clearInterval(interval);
           this.logger.log('Server does not respond');
           return resolve(null);
@@ -216,7 +218,7 @@ export class StationWebSocketService {
         }
         this.logger.debug('Message not yet received, checking for more');
         currentAttemp++;
-      }, intervalTime);
+      }, Number(waitForMessageCheckIntervalInMs));
     });
   };
 }

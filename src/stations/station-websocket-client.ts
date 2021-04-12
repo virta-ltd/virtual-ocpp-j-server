@@ -36,6 +36,7 @@ export class StationWebSocketClient extends WebSocket {
   };
 
   public sendCallMsgForOperation(msg: string, operationName: string) {
+    // if station has ongoing operation, do not attempt to send further message
     if (this.callMessageOperationFromStation) {
       this.logger.error(`Ongoing operation: ${this.callMessageOperationFromStation}. Not sending ${msg}`);
       return;
@@ -45,9 +46,19 @@ export class StationWebSocketClient extends WebSocket {
     this.send(msg);
     this.callMessageOperationFromStation = operationName;
 
+    // calculate the time for the timeout to remove callMessageOperationFromStation
+    // timeout is same as timeout in StationWebsocketService: waitForMessage function
+    const {
+      WAIT_FOR_MESSAGE_CHECK_INTERVAL_IN_MS: waitForMessageCheckIntervalInMs,
+      WAIT_FOR_MESSAGE_CHECK_MAX_ATTEMPTS: waitForMessageCheckMaxAttempts,
+    } = process.env;
+    const removeCallMsgOperationNameTimeoutInMs =
+      Number(waitForMessageCheckIntervalInMs) * Number(waitForMessageCheckMaxAttempts);
+
+    // create a timeout to remove callMessageOperationFromStation so that the station can send message again
     this.removeCallMsgOperationNameTimer = setTimeout(() => {
       this.callMessageOperationFromStation = '';
-    }, 10000);
+    }, removeCallMsgOperationNameTimeoutInMs);
   }
 
   public clearRemoveCallMsgOperationNameTimer = () => {
