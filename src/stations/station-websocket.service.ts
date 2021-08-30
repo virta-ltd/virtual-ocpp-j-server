@@ -37,7 +37,7 @@ export class StationWebSocketService {
   };
 
   public onConnectionOpen = (wsClient: StationWebSocketClient, station: Station) => {
-    this.logger.log(`connection opened for station ${station.identity}, sending Boot`);
+    this.logger.log(`Connection opened for station ${station.identity}`);
     wsClient.stationIdentity = station.identity;
     wsClient.connectedTime = new Date();
 
@@ -46,7 +46,6 @@ export class StationWebSocketService {
       station,
       wsClient.getMessageIdForCall(),
     );
-    this.logger.verbose(`Sending BootNotification message for station ${wsClient.stationIdentity}: ${bootMessage}`);
     wsClient.sendCallMsgForOperation(bootMessage, OperationNameFromChargePoint.BootNotification);
 
     this.createHeartbeatInterval(wsClient, station);
@@ -68,7 +67,6 @@ export class StationWebSocketService {
         station,
         wsClient.getMessageIdForCall(),
       );
-      this.logger.verbose(`Sending Heartbeat message for station ${wsClient.stationIdentity}: ${heartbeatMessage}`);
       wsClient.sendCallMsgForOperation(heartbeatMessage, OperationNameFromChargePoint.Heartbeat);
     }, 60000);
   }
@@ -88,7 +86,6 @@ export class StationWebSocketService {
         wsClient.getMessageIdForCall(),
         { value: station.meterValue },
       );
-      this.logger.verbose(`Sending MeterValues message for station ${wsClient.stationIdentity}: ${message}`);
       wsClient.sendCallMsgForOperation(message, OperationNameFromChargePoint.MeterValues);
     }, 60000);
   }
@@ -169,13 +166,6 @@ export class StationWebSocketService {
     operationName: string,
     payload: StationOperationDto,
   ) {
-    // for case when message is sent from UI (maybe not needed, refactor?)
-    // if (operationName === 'StopTransaction') {
-    //   const dto = new CreateOrUpdateStationDto();
-    //   dto.meterValue = station.meterValue + calculatePowerUsageInWh(station.updatedAt, station.currentChargingPower);
-    //   this.stationRepository.updateStation(station, dto);
-    // }
-
     const message = this.byChargePointOperationMessageGenerator.createMessage(
       operationName,
       station,

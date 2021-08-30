@@ -43,6 +43,14 @@ export class StationWebSocketClient extends WebSocket {
     }
 
     this._lastMessageId = this._pendingMessageId;
+    this.logger.verbose(JSON.stringify(
+      {
+        message: "Sending message for station",
+        stationIdentity: this.stationIdentity,
+        operationName,
+        rawMessage: msg,
+      }
+    ));
     this.send(msg);
     this.callMessageOperationFromStation = operationName;
 
