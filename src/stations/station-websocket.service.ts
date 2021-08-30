@@ -37,7 +37,7 @@ export class StationWebSocketService {
   };
 
   public onConnectionOpen = (wsClient: StationWebSocketClient, station: Station) => {
-    this.logger.log(`connection opened for station ${station.identity}, sending Boot`);
+    this.logger.log(`Connection opened for station ${station.identity}`);
     wsClient.stationIdentity = station.identity;
     wsClient.connectedTime = new Date();
 

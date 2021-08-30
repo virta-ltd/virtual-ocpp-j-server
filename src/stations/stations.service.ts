@@ -17,7 +17,7 @@ export class StationsService {
     @InjectRepository(StationRepository)
     private stationRepository: StationRepository,
     private stationWebSocketService: StationWebSocketService,
-  ) { }
+  ) {}
 
   async getStations(filterDto: GetStationsFilterDto): Promise<Station[]> {
     return this.stationRepository.getStations(filterDto);
@@ -92,6 +92,7 @@ export class StationsService {
       stationOperationDto,
     );
 
+    this.logger.log(`Response to be sent to API client: ${JSON.stringify(response)}`);
     return { request, response };
   }
 }
