@@ -82,7 +82,7 @@ export class StationWebSocketClient extends WebSocket {
   public createConnectionCheckInterval() {
     this.connectionCheckInterval = setInterval(() => {
       if (this._isAlive === false) {
-        console.log('connection is dead');
+        this.logger.log(`Connection from ${this.stationIdentity} is broken from ping-pong check. Terminating`)
         return this.terminate();
       }
 
