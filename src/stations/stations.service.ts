@@ -65,6 +65,7 @@ export class StationsService {
     // remove closing / closed sockets
     this.connectedStationsClients.forEach(client => {
       if (client.readyState !== WebSocketReadyStates.CONNECTING && client.readyState !== WebSocketReadyStates.OPEN) {
+        this.logger.log(`Connection ${client.stationIdentity} is dead. Removing`);
         this.connectedStationsClients.delete(client);
       }
     });

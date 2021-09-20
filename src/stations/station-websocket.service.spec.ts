@@ -4,8 +4,6 @@ import { Station } from './station.entity';
 import { StationWebSocketClient } from './station-websocket-client';
 import { BadRequestException } from '@nestjs/common';
 import { ByChargePointOperationMessageGenerator } from '../message/by-charge-point/by-charge-point-operation-message-generator';
-import { StationRepository } from './station.repository';
-// @ts-ignore
 import * as utils from './utils';
 import { flushPromises } from '../jest/helper';
 import { CallMsgHandlerFactory } from './handler/call-msg/call-msg-handler-factory';
@@ -14,17 +12,12 @@ import { CallMsgHandlerInterface } from './handler/call-msg/call-msg-handler-int
 import { CallResultMsgHandlerInterface } from './handler/call-result-msg/call-result-msg-handler-interface';
 jest.mock('ws');
 
-const mockStationRepository = () => ({
-  updateStation: jest.fn(),
-});
-
 describe('StationWebSocketService', () => {
   let station: Station;
   let stationWebSocketService: StationWebSocketService;
-  let mockByChargePointOperationMessageGenerator = {
+  const mockByChargePointOperationMessageGenerator = {
     createMessage: jest.fn(),
   };
-  let stationRepository: StationRepository;
   let callMsgHandlerFactory: CallMsgHandlerFactory;
   let callResultMsgHandlerFactory: CallResultMsgHandlerFactory;
 
@@ -44,10 +37,6 @@ describe('StationWebSocketService', () => {
           },
         },
         {
-          provide: StationRepository,
-          useFactory: mockStationRepository,
-        },
-        {
           provide: ByChargePointOperationMessageGenerator,
           useValue: mockByChargePointOperationMessageGenerator,
         },
@@ -55,7 +44,6 @@ describe('StationWebSocketService', () => {
       ],
     }).compile();
     stationWebSocketService = module.get<StationWebSocketService>(StationWebSocketService);
-    stationRepository = module.get<StationRepository>(StationRepository);
     callMsgHandlerFactory = module.get<CallMsgHandlerFactory>(CallMsgHandlerFactory);
     callResultMsgHandlerFactory = module.get<CallResultMsgHandlerFactory>(CallResultMsgHandlerFactory);
 
@@ -74,6 +62,7 @@ describe('StationWebSocketService', () => {
       expect(onFn).toHaveBeenCalledWith('message', expect.any(Function));
       expect(onFn).toHaveBeenCalledWith('close', expect.any(Function));
       expect(onFn).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(onFn).toHaveBeenCalledWith('pong', expect.any(Function));
     });
   });
 
@@ -222,8 +211,10 @@ describe('StationWebSocketService', () => {
       mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue(
         `[2,\"10\",\"BootNotification\",{\"chargePointVendor\":\"Virtual\",\"chargePointModel\":\"OCPP-J 1.6\"}]`,
       );
+      stationWebSocketClient.createConnectionCheckInterval = jest.fn();
       stationWebSocketService.onConnectionOpen(stationWebSocketClient, station);
 
+      expect(stationWebSocketClient.createConnectionCheckInterval).toHaveBeenCalledTimes(1);
       expect(stationWebSocketClient.stationIdentity).toEqual(station.identity);
       expect(stationWebSocketClient.connectedTime).toBeInstanceOf(Date);
       expect(mockByChargePointOperationMessageGenerator.createMessage).toHaveBeenCalledWith(
@@ -250,12 +241,14 @@ describe('StationWebSocketService', () => {
     it('test onClose function', () => {
       jest.useFakeTimers();
       stationWebSocketClient.connectedTime = new Date();
-      stationWebSocketClient.heartbeatInterval = setInterval(() => {}, 1000);
-      stationWebSocketClient.meterValueInterval = setInterval(() => {}, 1000);
+      stationWebSocketClient.heartbeatInterval = setInterval(() => null, 1000);
+      stationWebSocketClient.meterValueInterval = setInterval(() => null, 1000);
+      stationWebSocketClient.clearConnectionCheckInterval = jest.fn();
       stationWebSocketService.onConnectionClosed(stationWebSocketClient, station, 1005, 'needs to be closed');
 
       expect(clearInterval).toHaveBeenCalledWith(stationWebSocketClient.heartbeatInterval);
       expect(clearInterval).toHaveBeenCalledWith(stationWebSocketClient.meterValueInterval);
+      expect(stationWebSocketClient.clearConnectionCheckInterval).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -278,22 +271,6 @@ describe('StationWebSocketService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
-
-    // it('updates station meter value if operationName is StopTransaction', async () => {
-    //   const operationName = 'StopTransaction';
-    //   mockByChargePointOperationMessageGenerator.createMessage.mockReturnValue('some message');
-    //   jest.spyOn(stationWebSocketService, 'waitForMessage').mockResolvedValue('abcdef');
-    //   station.updatedAt = new Date();
-    //   await stationWebSocketService.prepareAndSendMessageToCentralSystem(
-    //     stationWebSocketClient,
-    //     station,
-    //     operationName,
-    //     {},
-    //   );
-    //   expect(stationRepository.updateStation).toHaveBeenCalledWith(station, {
-    //     meterValue: expect.any(Number),
-    //   });
-    // });
 
     it('sends message to CentralSystem based on params', async () => {
       const operationName = 'Heartbeat';
