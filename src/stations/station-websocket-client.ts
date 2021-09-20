@@ -13,6 +13,8 @@ export class StationWebSocketClient extends WebSocket {
   private _callMessageOperationFromStation: string = '';
   private removeCallMsgOperationNameTimer: NodeJS.Timeout = null;
   private _pendingMessageId: number = 0;
+  private connectionCheckInterval: NodeJS.Timeout = null;
+  private _isAlive = true;
 
   public get callMessageOperationFromStation() {
     return this._callMessageOperationFromStation;
@@ -75,5 +77,31 @@ export class StationWebSocketClient extends WebSocket {
 
   public isLastMessageIdSimilar(reqId: string) {
     return this._lastMessageId.toString() === reqId;
+  }
+
+  public createConnectionCheckInterval() {
+    this.connectionCheckInterval = setInterval(() => {
+      if (this._isAlive === false) {
+        console.log('connection is dead');
+        return this.terminate();
+      }
+
+      // sending Ping to Central System
+      this._isAlive = false;
+      this.ping();
+
+    }, 60000);
+  }
+
+  public clearConnectionCheckInterval() {
+    clearTimeout(this.connectionCheckInterval);
+  }
+
+  public pongHandler() {
+    this._isAlive = true;
+  }
+
+  public get isAlive() {
+    return this._isAlive;
   }
 }

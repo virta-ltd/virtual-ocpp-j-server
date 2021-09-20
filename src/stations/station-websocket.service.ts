@@ -33,6 +33,8 @@ export class StationWebSocketService {
     wsClient.on('message', (data: string) => this.onMessage(wsClient, station, data));
     wsClient.on('error', error => this.onError(error));
     wsClient.on('close', (code: number, reason: string) => this.onConnectionClosed(wsClient, station, code, reason));
+    wsClient.on('pong', () => wsClient.pongHandler());
+
     return wsClient;
   };
 
@@ -54,7 +56,7 @@ export class StationWebSocketService {
       this.createMeterValueInterval(wsClient, station);
     }
 
-    // TODO: ping the server if heartbeat is more than 5 mins
+    wsClient.createConnectionCheckInterval();
   };
 
   private createHeartbeatInterval(wsClient: StationWebSocketClient, station: Station) {
@@ -149,6 +151,7 @@ export class StationWebSocketService {
   public onConnectionClosed = (wsClient: StationWebSocketClient, station: Station, code: number, reason: string) => {
     clearInterval(wsClient.heartbeatInterval);
     clearInterval(wsClient.meterValueInterval);
+    wsClient.clearConnectionCheckInterval();
 
     if (wsClient?.connectedTime) {
       const connectedDurationInSeconds = (new Date().getTime() - wsClient.connectedTime.getTime()) / 1000;

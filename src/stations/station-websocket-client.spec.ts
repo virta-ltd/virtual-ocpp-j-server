@@ -111,4 +111,44 @@ describe('StationWebSocketClient', () => {
       expect(clearTimeout).toHaveBeenCalled();
     });
   });
+
+  describe('connection check interval & pongHandler', () => {
+    it('sets isAlive to false when connectionCheck is run', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.createConnectionCheckInterval();
+      jest.advanceTimersToNextTimer();
+      expect(client.isAlive).toBeFalsy();
+    });
+
+    it('terminates connection when isAlive is false and connection check interval is run', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.createConnectionCheckInterval();
+      jest.advanceTimersToNextTimer();
+      expect(client.isAlive).toBeFalsy();
+
+      jest.advanceTimersToNextTimer(); // next timer will terminate connection if isAlive is false
+      expect(client.terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it('sets isAlive to true when pongHandler is called', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.createConnectionCheckInterval();
+      jest.advanceTimersToNextTimer();
+
+      expect(client.isAlive).toBeFalsy();
+      client.pongHandler();
+      expect(client.isAlive).toBeTruthy();
+    });
+
+    it('clearTimeout is run for connectionCheckInterval', () => {
+      jest.useFakeTimers();
+      const client = new StationWebSocketClient('localhost');
+      client.createConnectionCheckInterval();
+      client.clearConnectionCheckInterval();
+      expect(clearTimeout).toHaveBeenCalledWith(expect.anything())
+    });
+  });
 });
