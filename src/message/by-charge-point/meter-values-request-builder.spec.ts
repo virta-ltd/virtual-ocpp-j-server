@@ -22,6 +22,7 @@ describe('MeterValuesRequestBuilder', () => {
     const request = meterValuesRequestBuilder.build(station, {});
     const meterValue = request.meterValue[0];
     expect(meterValue).not.toBeNull();
+    expect(meterValue.timestamp).not.toBeUndefined();
     expect(meterValue.sampledValue[0].value).toEqual(station.meterValue);
     expect(meterValue.sampledValue[0].context).toEqual(ReadingContext.SamplePeriodic);
     expect(meterValue.sampledValue[0].measurand).toEqual(Measurand.EnergyActiveImportRegister);
@@ -43,6 +44,7 @@ describe('MeterValuesRequestBuilder', () => {
     const request = meterValuesRequestBuilder.build(station, payload);
     const meterValue = request.meterValue[0];
     expect(meterValue).not.toBeNull();
+    expect(meterValue.timestamp).not.toBeUndefined();
     expect(meterValue.sampledValue[0].value).toEqual(payload.value);
     expect(meterValue.sampledValue[0].context).toEqual(payload.context);
     expect(meterValue.sampledValue[0].measurand).toEqual(payload.measurand);
