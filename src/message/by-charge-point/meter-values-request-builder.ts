@@ -16,6 +16,7 @@ export class MeterValuesRequestBuilder implements ByChargePointRequestBuilderInt
     sampledValue.location = payload.location ?? Location.Outlet;
 
     const meterValue = new MeterValue();
+    meterValue.timestamp = new Date().toISOString();
     meterValue.sampledValue.push(sampledValue);
     request.meterValue.push(meterValue);
     if (station.currentTransactionId) {
