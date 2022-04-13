@@ -8,7 +8,7 @@ export class StartTransactionRequestBuilder implements ByChargePointRequestBuild
     request.connectorId = 1; // only support connector 1 at the moment, should be upgraded
     request.idTag = payload.idTag;
     request.meterStart = station.meterValue;
-    request.timestamp = new Date().toISOString();
+    request.timestamp = payload.timestamp ?? new Date().toISOString();
     return request;
   }
 
