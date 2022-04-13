@@ -28,6 +28,19 @@ describe('StartTransactionRequestBuilder', () => {
     expect(request.meterStart).toEqual(station.meterValue);
   });
 
+  it('test build with custom timestamp in payload', () => {
+    const payload = {
+      idTag: 'ABCD',
+      timestamp: '2022-04-13T07:59:14.925Z'
+    };
+    const request = startTransactionRequestBuilder.build(station, payload);
+
+    expect(request.idTag).toEqual(payload.idTag);
+    expect(request.connectorId).toEqual(1);
+    expect(request.timestamp).toStrictEqual(payload.timestamp)
+    expect(request.meterStart).toEqual(station.meterValue);
+  });
+
   test('getOperationName method', () => {
     expect(startTransactionRequestBuilder.getOperationName()).toStrictEqual('StartTransaction');
   });
