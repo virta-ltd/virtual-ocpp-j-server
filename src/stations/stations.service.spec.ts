@@ -101,7 +101,7 @@ describe('StationsService', () => {
       createStationFn.mockResolvedValue(station);
       const connectStationToCentralSystemFn = jest
         .spyOn(stationService, 'connectStationToCentralSystem')
-        .mockImplementation(_ => Promise.resolve(undefined));
+        .mockImplementation(() => Promise.resolve(undefined));
 
       const result = await stationService.createStation({});
 
@@ -158,8 +158,9 @@ describe('StationsService', () => {
       const station2 = new Station();
       station2.identity = 'station2';
       const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
+
       socketForStation2.stationIdentity = station2.identity;
-      socketForStation2.readyState = WebSocketReadyStates.OPEN;
+      Object.defineProperty(socketForStation2, 'readyState', { get: () => WebSocketReadyStates.OPEN });
 
       stationService.connectedStationsClients.add(socketForStation2);
       stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
@@ -178,7 +179,7 @@ describe('StationsService', () => {
       station2.identity = 'station2';
       const socketForStation2 = stationWebSocketService.createStationWebSocket(station2);
       socketForStation2.stationIdentity = station2.identity;
-      socketForStation2.readyState = WebSocketReadyStates.CLOSED;
+      Object.defineProperty(socketForStation2, 'readyState', { get: () => WebSocketReadyStates.CLOSED });
 
       stationService.connectedStationsClients.add(socketForStation2);
       stationService.connectStationToCentralSystem = jest.fn().mockImplementation();
@@ -220,7 +221,7 @@ describe('StationsService', () => {
       station1.identity = 'station1';
       const socketForStation1 = stationWebSocketService.createStationWebSocket(station1);
       socketForStation1.stationIdentity = station1.identity;
-      socketForStation1.readyState = WebSocketReadyStates.CLOSED;
+      Object.defineProperty(socketForStation1, 'readyState', { get: () => WebSocketReadyStates.CLOSED });
       stationService.connectedStationsClients.add(socketForStation1);
 
       stationService.getStationById = jest.fn().mockResolvedValue(station1);
@@ -236,13 +237,14 @@ describe('StationsService', () => {
       station1.identity = 'station1';
       const socketForStation1 = stationWebSocketService.createStationWebSocket(station1);
       socketForStation1.stationIdentity = station1.identity;
-      socketForStation1.readyState = WebSocketReadyStates.OPEN;
+      Object.defineProperty(socketForStation1, 'readyState', { get: () => WebSocketReadyStates.OPEN })
       stationService.connectedStationsClients.add(socketForStation1);
 
       stationService.getStationById = jest.fn().mockResolvedValue(station1);
-      stationWebSocketService.prepareAndSendMessageToCentralSystem = jest
-        .fn()
-        .mockResolvedValue({ request: 'req', response: 'res' });
+      stationWebSocketService.prepareAndSendMessageToCentralSystem =
+        jest
+          .fn()
+          .mockResolvedValue({ request: 'req', response: 'res' });
 
       const { request, response } = await stationService.sendStationOperationRequest(station1.id, 'Heartbeat', {});
       expect(stationWebSocketService.prepareAndSendMessageToCentralSystem).toHaveBeenCalledWith(
