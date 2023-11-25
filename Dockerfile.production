@@ -1,11 +1,11 @@
-FROM node:12.19 AS build
+FROM node:21.2 AS build
 
 # USER node
 WORKDIR /app
 COPY . .
 RUN npm ci && npm run build
 
-FROM node:12.19.0-slim
+FROM node:21.2.0-slim
 
 # USER node
 EXPOSE 8080
